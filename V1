@@ -1,287 +1,562 @@
--- Основной GUI скрипт для Roblox
-local ScreenGui = Instance.new("ScreenGui")
-local MainFrame = Instance.new("Frame")
-local TopBar = Instance.new("Frame")
-local MinimizeButton = Instance.new("TextButton")
-local CloseButton = Instance.new("TextButton")
-local SideMenu = Instance.new("Frame")
-local PlayerButton = Instance.new("TextButton")
-local MainButton = Instance.new("TextButton")
-local ViborButton = Instance.new("TextButton")
-local ContentFrame = Instance.new("Frame")
-local ContentTitle = Instance.new("TextLabel")
-local ContentScroll = Instance.new("ScrollingFrame")
+--[[
+    Modern GUI for Roblox
+    - Плавающая круглая кнопка (перетаскивается)
+    - Боковая панель с кнопками P, M, V
+    - Функция COIN: полёт к ближайшей монете
+--]]
 
--- Настройка ScreenGui
-ScreenGui.Name = "CustomGUI"
-ScreenGui.Parent = game.CoreGui
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.ResetOnSpawn = false
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
+-- ========== ПЕРЕМЕННЫЕ ДЛЯ COIN ==========
+local coinActive = false
+local currentTargetCoin = nil
+local flyConnection = nil
+local COIN_SPEED = 1.5
+
+-- ========== ФУНКЦИЯ ПОИСКА БЛИЖАЙШЕЙ МОНЕТЫ ==========
+local function findNearestCoin()
+    local character = LocalPlayer.Character
+    if not character then return nil end
+    
+    local rootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
+    if not rootPart then return nil end
+    
+    local currentPos = rootPart.Position
+    local nearestCoin = nil
+    local nearestDist = math.huge
+    
+    -- Поиск всех объектов с именем Coin_Server
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name == "Coin_Server" and obj:IsA("BasePart") then
+            local coinPos = obj.Position
+            local dist = (currentPos - coinPos).Magnitude
+            if dist < nearestDist then
+                nearestDist = dist
+                nearestCoin = obj
+            end
+        end
+    end
+    
+    return nearestCoin, nearestDist
+end
+
+-- ========== ФУНКЦИЯ ПОЛЁТА К МОНЕТЕ ==========
+local function flyToCoin(coin)
+    if not coin or not coin.Parent then return false end
+    
+    local character = LocalPlayer.Character
+    if not character then return false end
+    
+    local humanoid = character:FindFirstChild("Humanoid")
+    local rootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
+    
+    if not humanoid or not rootPart then return false end
+    
+    -- Отключаем гравитацию
+    humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+    humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    
+    local direction = (coin.Position - rootPart.Position).Unit
+    local velocity = direction * COIN_SPEED
+    
+    -- Устанавливаем скорость
+    rootPart.Velocity = velocity
+    
+    return true
+end
+
+-- ========== ОСНОВНОЙ ЦИКЛ COIN ==========
+local function startCoinFly()
+    if flyConnection then
+        flyConnection:Disconnect()
+        flyConnection = nil
+    end
+    
+    flyConnection = RunService.Heartbeat:Connect(function()
+        if not coinActive then return end
+        
+        local character = LocalPlayer.Character
+        if not character then return end
+        
+        local humanoid = character:FindFirstChild("Humanoid")
+        local rootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
+        
+        if not humanoid or not rootPart then return end
+        
+        -- Проверяем, живой ли игрок
+        if humanoid.Health <= 0 then
+            coinActive = false
+            return
+        end
+        
+        -- Ищем ближайшую монету
+        local nearestCoin, distance = findNearestCoin()
+        
+        if nearestCoin and nearestCoin.Parent then
+            currentTargetCoin = nearestCoin
+            
+            -- Летим к монете
+            local direction = (nearestCoin.Position - rootPart.Position).Unit
+            rootPart.Velocity = direction * COIN_SPEED
+            
+            -- Если очень близко к монете (подобрал)
+            if distance < 3 then
+                -- Ждём следующего кадра, чтобы монета исчезла и выбралась новая
+                task.wait(0.05)
+                currentTargetCoin = nil
+            end
+        else
+            -- Нет монет на карте, останавливаемся
+            rootPart.Velocity = Vector3.zero
+        end
+    end)
+end
+
+local function stopCoinFly()
+    coinActive = false
+    currentTargetCoin = nil
+    
+    if flyConnection then
+        flyConnection:Disconnect()
+        flyConnection = nil
+    end
+    
+    -- Восстанавливаем гравитацию
+    local character = LocalPlayer.Character
+    if character then
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+        end
+        local rootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
+        if rootPart then
+            rootPart.Velocity = Vector3.zero
+        end
+    end
+end
+
+-- ========== ПЛАВАЮЩАЯ КНОПКА ==========
+local floatingButton = Instance.new("TextButton")
+floatingButton.Name = "FloatingButton"
+floatingButton.Parent = game:GetService("CoreGui")
+floatingButton.BackgroundColor3 = Color3.fromRGB(80, 100, 200)
+floatingButton.BorderSizePixel = 0
+floatingButton.Position = UDim2.new(0, 20, 0.5, -25)
+floatingButton.Size = UDim2.new(0, 50, 0, 50)
+floatingButton.Text = "●"
+floatingButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+floatingButton.TextSize = 28
+floatingButton.Font = Enum.Font.GothamBold
+floatingButton.Draggable = true
+floatingButton.Active = true
+
+local floatingCorner = Instance.new("UICorner")
+floatingCorner.CornerRadius = UDim.new(1, 0)
+floatingCorner.Parent = floatingButton
+
+-- ========== ОСНОВНОЙ GUI ==========
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "CustomGUI"
+screenGui.Parent = game:GetService("CoreGui")
+screenGui.ResetOnSpawn = false
+screenGui.Enabled = false
 
 -- Главный фрейм
-MainFrame.Name = "MainFrame"
-MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-MainFrame.BorderSizePixel = 0
-MainFrame.Position = UDim2.new(0.3, 0, 0.25, 0)
-MainFrame.Size = UDim2.new(0, 450, 0, 320)
-MainFrame.Active = true
-MainFrame.Draggable = true
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Parent = screenGui
+mainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+mainFrame.BackgroundTransparency = 0.05
+mainFrame.BorderSizePixel = 0
+mainFrame.Position = UDim2.new(0.3, 0, 0.2, 0)
+mainFrame.Size = UDim2.new(0, 500, 0, 420)
+mainFrame.Active = true
+mainFrame.Draggable = true
 
--- Скругление углов главного фрейма
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 15)
-MainCorner.Parent = MainFrame
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 12)
+mainCorner.Parent = mainFrame
 
--- Верхняя панель (топ-бар)
-TopBar.Name = "TopBar"
-TopBar.Parent = MainFrame
-TopBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-TopBar.BorderSizePixel = 0
-TopBar.Size = UDim2.new(1, 0, 0, 45)
+-- Заголовок
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Parent = mainFrame
+titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+titleBar.BackgroundTransparency = 0.3
+titleBar.BorderSizePixel = 0
+titleBar.Size = UDim2.new(1, 0, 0, 40)
 
-local TopCorner = Instance.new("UICorner")
-TopCorner.CornerRadius = UDim.new(0, 15)
-TopCorner.Parent = TopBar
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.Parent = titleBar
 
--- Кнопка скрытия GUI (верхняя, белая)
-MinimizeButton.Name = "MinimizeButton"
-MinimizeButton.Parent = TopBar
-MinimizeButton.BackgroundColor3 = Color3.fromRGB(230, 230, 230)
-MinimizeButton.BorderSizePixel = 0
-MinimizeButton.Position = UDim2.new(1, -45, 0.25, 0)
-MinimizeButton.Size = UDim2.new(0, 30, 0, 23)
-MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.Text = ""
-MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-MinimizeButton.TextSize = 20
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -50, 1, 0)
+title.Position = UDim2.new(0, 15, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "GUI Controller"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 16
+title.Font = Enum.Font.GothamSemibold
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = titleBar
 
-local MinCorner = Instance.new("UICorner")
-MinCorner.CornerRadius = UDim.new(1, 0)
-MinCorner.Parent = MinimizeButton
+-- Кнопка закрытия
+local closeMainBtn = Instance.new("TextButton")
+closeMainBtn.Size = UDim2.new(0, 32, 0, 32)
+closeMainBtn.Position = UDim2.new(1, -38, 0, 4)
+closeMainBtn.Text = "✕"
+closeMainBtn.TextColor3 = Color3.fromRGB(180, 180, 200)
+closeMainBtn.TextSize = 16
+closeMainBtn.Font = Enum.Font.GothamBold
+closeMainBtn.BackgroundTransparency = 1
+closeMainBtn.BorderSizePixel = 0
+closeMainBtn.Parent = titleBar
 
--- Боковое меню (слева)
-SideMenu.Name = "SideMenu"
-SideMenu.Parent = MainFrame
-SideMenu.BackgroundColor3 = Color3.fromRGB(245, 245, 245)
-SideMenu.BorderSizePixel = 0
-SideMenu.Position = UDim2.new(0, 0, 0, 45)
-SideMenu.Size = UDim2.new(0, 60, 1, -45)
+closeMainBtn.MouseButton1Click:Connect(function()
+    screenGui.Enabled = false
+    floatingButton.Visible = true
+    if coinActive then
+        stopCoinFly()
+    end
+end)
 
--- Кнопка Player (P)
-PlayerButton.Name = "PlayerButton"
-PlayerButton.Parent = SideMenu
-PlayerButton.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
-PlayerButton.BorderSizePixel = 0
-PlayerButton.Position = UDim2.new(0.1, 0, 0.03, 0)
-PlayerButton.Size = UDim2.new(0, 48, 0, 48)
-PlayerButton.Font = Enum.Font.GothamBold
-PlayerButton.Text = "P"
-PlayerButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-PlayerButton.TextSize = 24
+-- ========== БОКОВАЯ ПАНЕЛЬ ==========
+local sidePanel = Instance.new("Frame")
+sidePanel.Name = "SidePanel"
+sidePanel.Parent = mainFrame
+sidePanel.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
+sidePanel.BackgroundTransparency = 0.2
+sidePanel.BorderSizePixel = 0
+sidePanel.Position = UDim2.new(1, -60, 0, 40)
+sidePanel.Size = UDim2.new(0, 55, 1, -40)
 
-local PlayerCorner = Instance.new("UICorner")
-PlayerCorner.CornerRadius = UDim.new(0, 10)
-PlayerCorner.Parent = PlayerButton
+local panelCorner = Instance.new("UICorner")
+panelCorner.CornerRadius = UDim.new(0, 8)
+panelCorner.Parent = sidePanel
 
--- Кнопка Main (M)
-MainButton.Name = "MainButton"
-MainButton.Parent = SideMenu
-MainButton.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
-MainButton.BorderSizePixel = 0
-MainButton.Position = UDim2.new(0.1, 0, 0.18, 0)
-MainButton.Size = UDim2.new(0, 48, 0, 48)
-MainButton.Font = Enum.Font.GothamBold
-MainButton.Text = "M"
-MainButton.TextColor3 = Color3.fromRGB(100, 100, 100)
-MainButton.TextSize = 24
+-- Кнопка P
+local btnP = Instance.new("TextButton")
+btnP.Name = "BtnP"
+btnP.Parent = sidePanel
+btnP.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+btnP.BorderSizePixel = 0
+btnP.Position = UDim2.new(0.1, 0, 0.05, 0)
+btnP.Size = UDim2.new(0, 44, 0, 44)
+btnP.Text = "P"
+btnP.TextColor3 = Color3.fromRGB(200, 200, 200)
+btnP.TextSize = 22
+btnP.Font = Enum.Font.GothamBold
 
-local MainCorner2 = Instance.new("UICorner")
-MainCorner2.CornerRadius = UDim.new(0, 10)
-MainCorner2.Parent = MainButton
+local btnPCorner = Instance.new("UICorner")
+btnPCorner.CornerRadius = UDim.new(0, 10)
+btnPCorner.Parent = btnP
 
--- Кнопка Vibor (V)
-ViborButton.Name = "ViborButton"
-ViborButton.Parent = SideMenu
-ViborButton.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
-ViborButton.BorderSizePixel = 0
-ViborButton.Position = UDim2.new(0.1, 0, 0.33, 0)
-ViborButton.Size = UDim2.new(0, 48, 0, 48)
-ViborButton.Font = Enum.Font.GothamBold
-ViborButton.Text = "V"
-ViborButton.TextColor3 = Color3.fromRGB(100, 100, 100)
-ViborButton.TextSize = 24
+-- Кнопка M
+local btnM = Instance.new("TextButton")
+btnM.Name = "BtnM"
+btnM.Parent = sidePanel
+btnM.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+btnM.BorderSizePixel = 0
+btnM.Position = UDim2.new(0.1, 0, 0.22, 0)
+btnM.Size = UDim2.new(0, 44, 0, 44)
+btnM.Text = "M"
+btnM.TextColor3 = Color3.fromRGB(200, 200, 200)
+btnM.TextSize = 22
+btnM.Font = Enum.Font.GothamBold
 
-local ViborCorner = Instance.new("UICorner")
-ViborCorner.CornerRadius = UDim.new(0, 10)
-ViborCorner.Parent = ViborButton
+local btnMCorner = Instance.new("UICorner")
+btnMCorner.CornerRadius = UDim.new(0, 10)
+btnMCorner.Parent = btnM
 
--- Область контента
-ContentFrame.Name = "ContentFrame"
-ContentFrame.Parent = MainFrame
-ContentFrame.BackgroundColor3 = Color3.fromRGB(200, 255, 255)
-ContentFrame.BorderSizePixel = 0
-ContentFrame.Position = UDim2.new(0, 60, 0, 45)
-ContentFrame.Size = UDim2.new(1, -60, 1, -45)
+-- Кнопка V
+local btnV = Instance.new("TextButton")
+btnV.Name = "BtnV"
+btnV.Parent = sidePanel
+btnV.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+btnV.BorderSizePixel = 0
+btnV.Position = UDim2.new(0.1, 0, 0.39, 0)
+btnV.Size = UDim2.new(0, 44, 0, 44)
+btnV.Text = "V"
+btnV.TextColor3 = Color3.fromRGB(200, 200, 200)
+btnV.TextSize = 22
+btnV.Font = Enum.Font.GothamBold
 
--- Кнопка закрытия (нижняя правая, ярко-зелёная)
-CloseButton.Name = "CloseButton"
-CloseButton.Parent = ContentFrame
-CloseButton.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
-CloseButton.BorderSizePixel = 0
-CloseButton.Position = UDim2.new(1, -45, 1, -45)
-CloseButton.Size = UDim2.new(0, 35, 0, 35)
-CloseButton.Font = Enum.Font.GothamBold
-CloseButton.Text = "×"
-CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseButton.TextSize = 28
+local btnVCorner = Instance.new("UICorner")
+btnVCorner.CornerRadius = UDim.new(0, 10)
+btnVCorner.Parent = btnV
 
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 10)
-CloseCorner.Parent = CloseButton
+-- Кнопка скрытия
+local hideBtn = Instance.new("TextButton")
+hideBtn.Name = "HideBtn"
+hideBtn.Parent = sidePanel
+hideBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+hideBtn.BorderSizePixel = 0
+hideBtn.Position = UDim2.new(0.1, 0, 0.56, 0)
+hideBtn.Size = UDim2.new(0, 44, 0, 44)
+hideBtn.Text = "□"
+hideBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+hideBtn.TextSize = 20
+hideBtn.Font = Enum.Font.GothamBold
 
--- Заголовок раздела (белое облако)
-ContentTitle.Name = "ContentTitle"
-ContentTitle.Parent = ContentFrame
-ContentTitle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-ContentTitle.BorderSizePixel = 0
-ContentTitle.Position = UDim2.new(0.05, 0, 0.05, 0)
-ContentTitle.Size = UDim2.new(0.9, 0, 0, 35)
-ContentTitle.Font = Enum.Font.GothamBold
-ContentTitle.Text = "ESP"
-ContentTitle.TextColor3 = Color3.fromRGB(150, 255, 150)
-ContentTitle.TextSize = 20
-ContentTitle.TextXAlignment = Enum.TextXAlignment.Left
-ContentTitle.TextXAlignment = Enum.TextXAlignment.Center
+local hideCorner = Instance.new("UICorner")
+hideCorner.CornerRadius = UDim.new(0, 10)
+hideCorner.Parent = hideBtn
 
-local ContentTitleCorner = Instance.new("UICorner")
-ContentTitleCorner.CornerRadius = UDim.new(0, 12)
-ContentTitleCorner.Parent = ContentTitle
+-- ========== КНОПКА COIN (новая) ==========
+local coinBtn = Instance.new("TextButton")
+coinBtn.Name = "CoinBtn"
+coinBtn.Parent = sidePanel
+coinBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+coinBtn.BorderSizePixel = 0
+coinBtn.Position = UDim2.new(0.1, 0, 0.73, 0)
+coinBtn.Size = UDim2.new(0, 44, 0, 44)
+coinBtn.Text = "₿"
+coinBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+coinBtn.TextSize = 22
+coinBtn.Font = Enum.Font.GothamBold
 
--- Прокручиваемая область для функций
-ContentScroll.Name = "ContentScroll"
-ContentScroll.Parent = ContentFrame
-ContentScroll.BackgroundTransparency = 1
-ContentScroll.BorderSizePixel = 0
-ContentScroll.Position = UDim2.new(0.05, 0, 0, 50)
-ContentScroll.Size = UDim2.new(0.9, 0, 1, -100)
-ContentScroll.ScrollBarThickness = 4
-ContentScroll.CanvasSize = UDim2.new(0, 0, 0, 400)
+local coinCorner = Instance.new("UICorner")
+coinCorner.CornerRadius = UDim.new(0, 10)
+coinCorner.Parent = coinBtn
 
--- Функция создания тоггла
-local function createToggle(parent, position, labelText)
-	local ToggleFrame = Instance.new("Frame")
-	ToggleFrame.Parent = parent
-	ToggleFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	ToggleFrame.BorderSizePixel = 0
-	ToggleFrame.Position = position
-	ToggleFrame.Size = UDim2.new(0, 320, 0, 35)
-	
-	local ToggleCorner = Instance.new("UICorner")
-	ToggleCorner.CornerRadius = UDim.new(0, 8)
-	ToggleCorner.Parent = ToggleFrame
-	
-	local Label = Instance.new("TextLabel")
-	Label.Parent = ToggleFrame
-	Label.BackgroundTransparency = 1
-	Label.Position = UDim2.new(0, 10, 0, 0)
-	Label.Size = UDim2.new(0.7, 0, 1, 0)
-	Label.Font = Enum.Font.Gotham
-	Label.Text = labelText
-	Label.TextColor3 = Color3.fromRGB(100, 100, 100)
-	Label.TextSize = 14
-	Label.TextXAlignment = Enum.TextXAlignment.Left
-	
-	local ToggleButton = Instance.new("TextButton")
-	ToggleButton.Parent = ToggleFrame
-	ToggleButton.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
-	ToggleButton.BorderSizePixel = 0
-	ToggleButton.Position = UDim2.new(1, -55, 0.15, 0)
-	ToggleButton.Size = UDim2.new(0, 45, 0, 23)
-	ToggleButton.Text = ""
-	
-	local ToggleBtnCorner = Instance.new("UICorner")
-	ToggleBtnCorner.CornerRadius = UDim.new(1, 0)
-	ToggleBtnCorner.Parent = ToggleButton
-	
-	local ToggleCircle = Instance.new("Frame")
-	ToggleCircle.Parent = ToggleButton
-	ToggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	ToggleCircle.BorderSizePixel = 0
-	ToggleCircle.Position = UDim2.new(0, 2, 0.1, 0)
-	ToggleCircle.Size = UDim2.new(0, 18, 0, 18)
-	
-	local CircleCorner = Instance.new("UICorner")
-	CircleCorner.CornerRadius = UDim.new(1, 0)
-	CircleCorner.Parent = ToggleCircle
-	
-	local toggled = false
-	ToggleButton.MouseButton1Click:Connect(function()
-		toggled = not toggled
-		if toggled then
-			ToggleButton.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
-			ToggleCircle:TweenPosition(UDim2.new(1, -20, 0.1, 0), "Out", "Quad", 0.2, true)
-		else
-			ToggleButton.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
-			ToggleCircle:TweenPosition(UDim2.new(0, 2, 0.1, 0), "Out", "Quad", 0.2, true)
-		end
-	end)
-	
-	return ToggleFrame, toggled
+-- ========== ОБЛАСТЬ КОНТЕНТА ==========
+local contentFrame = Instance.new("Frame")
+contentFrame.Name = "ContentFrame"
+contentFrame.Parent = mainFrame
+contentFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+contentFrame.BackgroundTransparency = 0.1
+contentFrame.BorderSizePixel = 0
+contentFrame.Position = UDim2.new(0, 10, 0, 50)
+contentFrame.Size = UDim2.new(1, -75, 1, -60)
+
+local contentCorner = Instance.new("UICorner")
+contentCorner.CornerRadius = UDim.new(0, 8)
+contentCorner.Parent = contentFrame
+
+-- Заголовок раздела
+local sectionTitle = Instance.new("TextLabel")
+sectionTitle.Name = "SectionTitle"
+sectionTitle.Parent = contentFrame
+sectionTitle.Size = UDim2.new(1, -20, 0, 35)
+sectionTitle.Position = UDim2.new(0, 10, 0, 5)
+sectionTitle.BackgroundTransparency = 1
+sectionTitle.Text = "PLAYER"
+sectionTitle.TextColor3 = Color3.fromRGB(100, 255, 100)
+sectionTitle.TextSize = 18
+sectionTitle.Font = Enum.Font.GothamBold
+sectionTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+-- ScrollingFrame
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Name = "ScrollFrame"
+scrollFrame.Parent = contentFrame
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.BorderSizePixel = 0
+scrollFrame.Position = UDim2.new(0, 10, 0, 45)
+scrollFrame.Size = UDim2.new(1, -20, 1, -55)
+scrollFrame.ScrollBarThickness = 3
+scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 100)
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 300)
+
+local scrollLayout = Instance.new("UIListLayout")
+scrollLayout.Padding = UDim.new(0, 6)
+scrollLayout.Parent = scrollFrame
+
+scrollLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollLayout.AbsoluteContentSize.Y + 10)
+end)
+
+-- ========== ФУНКЦИЯ СОЗДАНИЯ ТОГГЛА ==========
+local function createToggle(parent, labelText, defaultValue)
+    local toggleFrame = Instance.new("Frame")
+    toggleFrame.Size = UDim2.new(1, 0, 0, 38)
+    toggleFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    toggleFrame.BackgroundTransparency = 0.3
+    toggleFrame.BorderSizePixel = 0
+    
+    local frameCorner = Instance.new("UICorner")
+    frameCorner.CornerRadius = UDim.new(0, 8)
+    frameCorner.Parent = toggleFrame
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.7, -10, 1, 0)
+    label.Position = UDim2.new(0, 12, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = labelText
+    label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    label.TextSize = 13
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = toggleFrame
+    
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0, 50, 0, 26)
+    toggleBtn.Position = UDim2.new(1, -60, 0.5, -13)
+    toggleBtn.BackgroundColor3 = defaultValue and Color3.fromRGB(80, 200, 80) or Color3.fromRGB(80, 80, 100)
+    toggleBtn.BorderSizePixel = 0
+    toggleBtn.Text = ""
+    toggleBtn.Parent = toggleFrame
+    
+    local toggleCorner = Instance.new("UICorner")
+    toggleCorner.CornerRadius = UDim.new(1, 0)
+    toggleCorner.Parent = toggleBtn
+    
+    local toggleCircle = Instance.new("Frame")
+    toggleCircle.Size = UDim2.new(0, 20, 0, 20)
+    toggleCircle.Position = defaultValue and UDim2.new(1, -24, 0.5, -10) or UDim2.new(0, 4, 0.5, -10)
+    toggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    toggleCircle.BorderSizePixel = 0
+    
+    local circleCorner = Instance.new("UICorner")
+    circleCorner.CornerRadius = UDim.new(1, 0)
+    circleCorner.Parent = toggleCircle
+    
+    toggleCircle.Parent = toggleBtn
+    
+    local toggled = defaultValue or false
+    
+    toggleBtn.MouseButton1Click:Connect(function()
+        toggled = not toggled
+        if toggled then
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+            toggleCircle:TweenPosition(UDim2.new(1, -24, 0.5, -10), "Out", "Quad", 0.1, true)
+        else
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
+            toggleCircle:TweenPosition(UDim2.new(0, 4, 0.5, -10), "Out", "Quad", 0.1, true)
+        end
+    end)
+    
+    return toggleFrame, function() return toggled end
 end
 
--- Примеры тогглов для раздела ESP
-createToggle(ContentScroll, UDim2.new(0, 0, 0, 10), "ESP")
-createToggle(ContentScroll, UDim2.new(0, 0, 0, 55), "NOCLIP")
+-- ========== ЗАПОЛНЕНИЕ ТОГГЛОВ ==========
+local sections = { Player = {}, Main = {}, Vibor = {} }
 
--- Логика переключения разделов
-local function switchSection(button, sectionName, displayName)
-	-- Сброс цветов всех кнопок
-	PlayerButton.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
-	PlayerButton.TextColor3 = Color3.fromRGB(100, 100, 100)
-	MainButton.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
-	MainButton.TextColor3 = Color3.fromRGB(100, 100, 100)
-	ViborButton.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
-	ViborButton.TextColor3 = Color3.fromRGB(100, 100, 100)
-	
-	-- Подсветка активной кнопки
-	button.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
-	button.TextColor3 = Color3.fromRGB(255, 255, 255)
-	
-	-- Смена заголовка
-	ContentTitle.Text = displayName
+-- Раздел Player
+local playerToggles = {}
+local playerToggleNames = {"ESP", "NOCLIP", "Fly", "Speed", "Infinite Jump", "God Mode", "Auto Clicker", "Silent Aim"}
+for i, name in ipairs(playerToggleNames) do
+    local toggle, getter = createToggle(scrollFrame, name, i == 1)
+    toggle.Parent = scrollFrame
+    table.insert(playerToggles, {name = name, toggle = toggle, getter = getter})
+end
+sections.Player = playerToggles
+
+-- Раздел Main
+for _, child in ipairs(scrollFrame:GetChildren()) do
+    if child:IsA("Frame") then child:Destroy() end
 end
 
--- Подключение кнопок разделов
-PlayerButton.MouseButton1Click:Connect(function()
-	switchSection(PlayerButton, "Player", "PLAYER")
+local mainToggles = {}
+local mainToggleNames = {"Visuals", "Chams", "Tracers", "Box ESP", "Skeleton ESP", "FOV Changer", "Zoom", "Crosshair"}
+for i, name in ipairs(mainToggleNames) do
+    local toggle, getter = createToggle(scrollFrame, name, i == 1)
+    toggle.Parent = scrollFrame
+    table.insert(mainToggles, {name = name, toggle = toggle, getter = getter})
+end
+sections.Main = mainToggles
+
+-- Раздел Vibor
+for _, child in ipairs(scrollFrame:GetChildren()) do
+    if child:IsA("Frame") then child:Destroy() end
+end
+
+local viborToggles = {}
+local viborToggleNames = {"Aimbot", "Triggerbot", "Recoil Control", "Spin Bot", "Anti-Aim", "Fake Lag", "Clantag", "Custom Skin"}
+for i, name in ipairs(viborToggleNames) do
+    local toggle, getter = createToggle(scrollFrame, name, false)
+    toggle.Parent = scrollFrame
+    table.insert(viborToggles, {name = name, toggle = toggle, getter = getter})
+end
+sections.Vibor = viborToggles
+
+-- ========== ПЕРЕКЛЮЧЕНИЕ РАЗДЕЛОВ ==========
+local function switchSection(sectionName)
+    btnP.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+    btnM.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+    btnV.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+    btnP.TextColor3 = Color3.fromRGB(200, 200, 200)
+    btnM.TextColor3 = Color3.fromRGB(200, 200, 200)
+    btnV.TextColor3 = Color3.fromRGB(200, 200, 200)
+    
+    if sectionName == "Player" then
+        btnP.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+        btnP.TextColor3 = Color3.fromRGB(255, 255, 255)
+        sectionTitle.Text = "PLAYER"
+    elseif sectionName == "Main" then
+        btnM.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+        btnM.TextColor3 = Color3.fromRGB(255, 255, 255)
+        sectionTitle.Text = "MAIN"
+    elseif sectionName == "Vibor" then
+        btnV.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+        btnV.TextColor3 = Color3.fromRGB(255, 255, 255)
+        sectionTitle.Text = "VIBOR"
+    end
+    
+    for _, child in ipairs(scrollFrame:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+    
+    local targetSection = sections[sectionName]
+    if targetSection then
+        for _, item in ipairs(targetSection) do
+            item.toggle.Parent = scrollFrame
+        end
+    end
+end
+
+btnP.MouseButton1Click:Connect(function() switchSection("Player") end)
+btnM.MouseButton1Click:Connect(function() switchSection("Main") end)
+btnV.MouseButton1Click:Connect(function() switchSection("Vibor") end)
+
+-- Кнопка скрытия
+local isHidden = false
+hideBtn.MouseButton1Click:Connect(function()
+    isHidden = not isHidden
+    if isHidden then
+        mainFrame:TweenSize(UDim2.new(0, 500, 0, 45), "Out", "Quad", 0.2, true)
+    else
+        mainFrame:TweenSize(UDim2.new(0, 500, 0, 420), "Out", "Quad", 0.2, true)
+    end
 end)
 
-MainButton.MouseButton1Click:Connect(function()
-	switchSection(MainButton, "Main", "MAIN")
+-- ========== ФУНКЦИЯ COIN ==========
+local coinToggleState = false
+local function updateCoinToggle()
+    if coinToggleState then
+        coinBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+        coinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        coinActive = true
+        startCoinFly()
+        print("[COIN] Активирован - полёт к монетам")
+    else
+        coinBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+        coinBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        coinActive = false
+        stopCoinFly()
+        print("[COIN] Деактивирован")
+    end
+end
+
+coinBtn.MouseButton1Click:Connect(function()
+    coinToggleState = not coinToggleState
+    updateCoinToggle()
 end)
 
-ViborButton.MouseButton1Click:Connect(function()
-	switchSection(ViborButton, "Vibor", "VIBOR")
+-- ========== УПРАВЛЕНИЕ ПЛАВАЮЩЕЙ КНОПКОЙ ==========
+floatingButton.MouseButton1Click:Connect(function()
+    screenGui.Enabled = true
+    floatingButton.Visible = false
 end)
 
--- Кнопка скрытия (верхняя белая)
-local isMinimized = false
-MinimizeButton.MouseButton1Click:Connect(function()
-	isMinimized = not isMinimized
-	if isMinimized then
-		MainFrame:TweenSize(UDim2.new(0, 450, 0, 45), "Out", "Quad", 0.3, true)
-	else
-		MainFrame:TweenSize(UDim2.new(0, 450, 0, 320), "Out", "Quad", 0.3, true)
-	end
-end)
-
--- Кнопка закрытия (нижняя ярко-зелёная)
-CloseButton.MouseButton1Click:Connect(function()
-	ScreenGui:Destroy()
-end)
-
--- Установка начального раздела
-switchSection(PlayerButton, "Player", "PLAYER")
-
-print("GUI загружен успешно!")
+-- ========== ЗАПУСК ==========
+switchSection("Player")
+print("[GUI] Загружен успешно!")
+print("[GUI] Кнопка COIN (₿) на боковой панеле включает полёт к монетам Coin_Server")
