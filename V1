@@ -36,7 +36,7 @@ RunService.Heartbeat:Connect(function()
         return 
     end
 
-    -- Если текущая цель исчезла или ее нет, ищем новую
+    -- Если текущаяя цель исчезла или ее нет, ищем новую
     if not currentTarget or not currentTarget.Parent then
         currentTarget = getClosestCoin()
     end
