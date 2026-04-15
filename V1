@@ -1,128 +1,55 @@
---[[
-    Universal Script Dumper for Xeno
-    Собирает информацию об активных скриптах и сохраняет в .txt файл
---]]
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
-print("[Dumper] Начинаю сбор информации об активных скриптах...")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- 1. Настройки
-local fileName = "script_dump_" .. os.date("%Y-%m-%d_%H-%M-%S") .. ".txt"
-local dumpData = {}
+-- Настройки
+_G.CoinFarmEnabled = true -- Переключатель (Toggle)
+local speed = 1.5 -- Твоя скорость
+local coinName = "Coin_Server"
 
--- 2. Функция для безопасного преобразования любого значения в строку
-local function serialize(value, depth)
-    depth = depth or 0
-    if depth > 5 then return " Max Depth Reached " end
+-- Функция поиска ближайшей монеты
+local function getClosestCoin()
+    local closestCoin = nil
+    local shortestDistance = math.huge
 
-    local valueType = type(value)
-    if valueType == "nil" then
-        return "nil"
-    elseif valueType == "string" then
-        return '"' .. value .. '"'
-    elseif valueType == "number" then
-        return tostring(value)
-    elseif valueType == "boolean" then
-        return tostring(value)
-    elseif valueType == "function" then
-        local info = debug.getinfo(value, "S")
-        local name = info and info.name or "unknown"
-        local source = info and info.short_src or "unknown"
-        return string.format("function(%s) [%s]", name, source)
-    elseif valueType == "table" then
-        return "table{...}"
-    else
-        return tostring(value)
-    end
-end
-
--- 3. Функция для рекурсивного обхода таблиц и сбора данных
-local function scanTable(tbl, name, path, depth, maxItems)
-    depth = depth or 0
-    maxItems = maxItems or 50
-    if depth > 3 then return end -- Ограничиваем глубину, чтобы файл не был слишком большим
-
-    if type(tbl) ~= "table" then return end
-
-    local itemCount = 0
-    for key, value in pairs(tbl) do
-        itemCount = itemCount + 1
-        if itemCount > maxItems then
-            table.insert(dumpData, string.rep("  ", depth) .. "... (and " .. (maxItems - itemCount) .. " more items)")
-            break
-        end
-
-        local keyStr = serialize(key, depth + 1)
-        local valueStr = serialize(value, depth + 1)
-        local currentPath = path .. "[" .. keyStr .. "]"
-
-        table.insert(dumpData, string.rep("  ", depth) .. currentPath .. " = " .. valueStr)
-
-        -- Рекурсивно сканируем вложенные таблицы
-        if type(value) == "table" and key ~= "_G" and key ~= "shared" then
-            scanTable(value, "", currentPath, depth + 1, maxItems)
-        end
-    end
-end
-
--- 4. Основная часть: сканируем глобальные хранилища
-table.insert(dumpData, "=== DUMP: _G (Global Environment) ===")
-scanTable(_G, "_G", "_G", 0, 30)
-
-table.insert(dumpData, "\n=== DUMP: shared (Shared Environment) ===")
-scanTable(shared, "shared", "shared", 0, 30)
-
-table.insert(dumpData, "\n=== DUMP: getgenv() (Executor's Global Environment) ===")
-local genv = getgenv()
-scanTable(genv, "getgenv()", "getgenv()", 0, 30)
-
-table.insert(dumpData, "\n=== DUMP: getfenv() (Current Function Environment) ===")
-local fenv = getfenv()
-if fenv ~= _G then
-    scanTable(fenv, "getfenv()", "getfenv()", 0, 30)
-else
-    table.insert(dumpData, "getfenv() is same as _G")
-end
-
--- 5. Поиск специфичных для BedWars и CatV6 объектов
-table.insert(dumpData, "\n=== SEARCH: CatV6 / Vape Related Objects ===")
-local foundVape = false
-for i, obj in ipairs(getgc(true)) do
-    if type(obj) == "table" then
-        if rawget(obj, "vape") or rawget(obj, "Vape") then
-            table.insert(dumpData, "Found potential Vape table at index: " .. i)
-            scanTable(obj, "", "gc["..i.."]", 0, 20)
-            foundVape = true
-        elseif rawget(obj, "Categories") and rawget(obj, "Modules") then
-            table.insert(dumpData, "Found potential CatV6 module table at index: " .. i)
-            scanTable(obj, "", "gc["..i.."]", 0, 20)
-        end
-    elseif type(obj) == "function" then
-        local info = debug.getinfo(obj, "S")
-        if info and info.source then
-            local src = info.source:lower()
-            if src:find("catv6") or src:find("vertex") or src:find("vape") then
-                table.insert(dumpData, "Found function from script: " .. src)
+    for _, object in pairs(workspace:GetDescendants()) do
+        if object.Name == coinName and object:IsA("BasePart") then
+            local distance = (rootPart.Position - object.Position).Magnitude
+            if distance < shortestDistance then
+                shortestDistance = distance
+                closestCoin = object
             end
         end
     end
+    return closestCoin
 end
 
-if not foundVape then
-    table.insert(dumpData, "No Vape/CatV6 related tables found in GC.")
-end
+local currentTarget = nil
 
--- 6. Сохраняем всё в файл
-local fullDump = table.concat(dumpData, "\n")
-local success, err = pcall(function()
-    writefile(fileName, fullDump)
+-- Основной цикл полета
+RunService.Heartbeat:Connect(function()
+    if not _G.CoinFarmEnabled then 
+        currentTarget = nil
+        return 
+    end
+
+    -- Если текущая цель исчезла или ее нет, ищем новую
+    if not currentTarget or not currentTarget.Parent then
+        currentTarget = getClosestCoin()
+    end
+
+    if currentTarget then
+        -- Вычисляем направление к монете
+        local direction = (currentTarget.Position - rootPart.Position).Unit
+        
+        -- Двигаем персонажа прямолинейно
+        -- Используем CFrame для плавного перемещения без физических рывков
+        rootPart.CFrame = rootPart.CFrame + (direction * speed)
+        
+        -- Опционально: заставляем персонажа смотреть на монету
+        rootPart.CFrame = CFrame.lookAt(rootPart.Position, currentTarget.Position)
+    end
 end)
-
-if success then
-    print("[Dumper] Успешно сохранено в файл: " .. fileName)
-    print("[Dumper] Размер файла: " .. #fullDump .. " символов")
-    print("[Dumper] Путь к файлу: " .. (getexecutorname and getexecutorname() or "папка с исполнителем"))
-else
-    print("[Dumper] Ошибка сохранения: " .. tostring(err))
-    print("[Dumper] Попытка вывести в консоль...")
-    print(fullDump)
-end
