@@ -1,0 +1,303 @@
+-- Основной GUI скрипт для Roblox
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local TopBar = Instance.new("Frame")
+local TitleLabel = Instance.new("TextLabel")
+local MinimizeButton = Instance.new("TextButton")
+local CloseButton = Instance.new("TextButton")
+local SideMenu = Instance.new("Frame")
+local PlayerButton = Instance.new("TextButton")
+local MainButton = Instance.new("TextButton")
+local ViborButton = Instance.new("TextButton")
+local ContentFrame = Instance.new("Frame")
+local ContentTitle = Instance.new("TextLabel")
+local ContentScroll = Instance.new("ScrollingFrame")
+
+-- Настройка ScreenGui
+ScreenGui.Name = "CustomGUI"
+ScreenGui.Parent = game.CoreGui
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.ResetOnSpawn = false
+
+-- Главный фрейм
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+MainFrame.BorderSizePixel = 0
+MainFrame.Position = UDim2.new(0.3, 0, 0.25, 0)
+MainFrame.Size = UDim2.new(0, 450, 0, 320)
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+-- Скругление углов главного фрейма
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 15)
+MainCorner.Parent = MainFrame
+
+-- Верхняя панель (топ-бар)
+TopBar.Name = "TopBar"
+TopBar.Parent = MainFrame
+TopBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+TopBar.BorderSizePixel = 0
+TopBar.Size = UDim2.new(1, 0, 0, 45)
+
+local TopCorner = Instance.new("UICorner")
+TopCorner.CornerRadius = UDim.new(0, 15)
+TopCorner.Parent = TopBar
+
+-- Название в топ-баре
+TitleLabel.Name = "TitleLabel"
+TitleLabel.Parent = TopBar
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Position = UDim2.new(0.15, 0, 0, 0)
+TitleLabel.Size = UDim2.new(0.5, 0, 1, 0)
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.Text = "НАУКА"
+TitleLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+TitleLabel.TextSize = 24
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Кнопка минимизации (скрыть GUI)
+MinimizeButton.Name = "MinimizeButton"
+MinimizeButton.Parent = TopBar
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(200, 255, 200)
+MinimizeButton.BorderSizePixel = 0
+MinimizeButton.Position = UDim2.new(1, -80, 0.2, 0)
+MinimizeButton.Size = UDim2.new(0, 30, 0, 27)
+MinimizeButton.Font = Enum.Font.GothamBold
+MinimizeButton.Text = "—"
+MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeButton.TextSize = 20
+
+local MinCorner = Instance.new("UICorner")
+MinCorner.CornerRadius = UDim.new(0, 8)
+MinCorner.Parent = MinimizeButton
+
+-- Кнопка закрытия (ярко-зелёная)
+CloseButton.Name = "CloseButton"
+CloseButton.Parent = TopBar
+CloseButton.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
+CloseButton.BorderSizePixel = 0
+CloseButton.Position = UDim2.new(1, -40, 0.2, 0)
+CloseButton.Size = UDim2.new(0, 30, 0, 27)
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.Text = "×"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 24
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 8)
+CloseCorner.Parent = CloseButton
+
+-- Боковое меню (слева)
+SideMenu.Name = "SideMenu"
+SideMenu.Parent = MainFrame
+SideMenu.BackgroundColor3 = Color3.fromRGB(245, 245, 245)
+SideMenu.BorderSizePixel = 0
+SideMenu.Position = UDim2.new(0, 0, 0, 45)
+SideMenu.Size = UDim2.new(0, 60, 1, -45)
+
+-- Кнопка Player (P)
+PlayerButton.Name = "PlayerButton"
+PlayerButton.Parent = SideMenu
+PlayerButton.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
+PlayerButton.BorderSizePixel = 0
+PlayerButton.Position = UDim2.new(0.1, 0, 0.03, 0)
+PlayerButton.Size = UDim2.new(0, 48, 0, 48)
+PlayerButton.Font = Enum.Font.GothamBold
+PlayerButton.Text = "P"
+PlayerButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+PlayerButton.TextSize = 24
+
+local PlayerCorner = Instance.new("UICorner")
+PlayerCorner.CornerRadius = UDim.new(0, 10)
+PlayerCorner.Parent = PlayerButton
+
+-- Кнопка Main (M)
+MainButton.Name = "MainButton"
+MainButton.Parent = SideMenu
+MainButton.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+MainButton.BorderSizePixel = 0
+MainButton.Position = UDim2.new(0.1, 0, 0.18, 0)
+MainButton.Size = UDim2.new(0, 48, 0, 48)
+MainButton.Font = Enum.Font.GothamBold
+MainButton.Text = "M"
+MainButton.TextColor3 = Color3.fromRGB(100, 100, 100)
+MainButton.TextSize = 24
+
+local MainCorner2 = Instance.new("UICorner")
+MainCorner2.CornerRadius = UDim.new(0, 10)
+MainCorner2.Parent = MainButton
+
+-- Кнопка Vibor (V)
+ViborButton.Name = "ViborButton"
+ViborButton.Parent = SideMenu
+ViborButton.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+ViborButton.BorderSizePixel = 0
+ViborButton.Position = UDim2.new(0.1, 0, 0.33, 0)
+ViborButton.Size = UDim2.new(0, 48, 0, 48)
+ViborButton.Font = Enum.Font.GothamBold
+ViborButton.Text = "V"
+ViborButton.TextColor3 = Color3.fromRGB(100, 100, 100)
+ViborButton.TextSize = 24
+
+local ViborCorner = Instance.new("UICorner")
+ViborCorner.CornerRadius = UDim.new(0, 10)
+ViborCorner.Parent = ViborButton
+
+-- Область контента
+ContentFrame.Name = "ContentFrame"
+ContentFrame.Parent = MainFrame
+ContentFrame.BackgroundColor3 = Color3.fromRGB(200, 255, 255)
+ContentFrame.BorderSizePixel = 0
+ContentFrame.Position = UDim2.new(0, 60, 0, 45)
+ContentFrame.Size = UDim2.new(1, -60, 1, -45)
+
+-- Заголовок раздела (белое облако)
+ContentTitle.Name = "ContentTitle"
+ContentTitle.Parent = ContentFrame
+ContentTitle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+ContentTitle.BorderSizePixel = 0
+ContentTitle.Position = UDim2.new(0.05, 0, 0.05, 0)
+ContentTitle.Size = UDim2.new(0.9, 0, 0, 35)
+ContentTitle.Font = Enum.Font.GothamBold
+ContentTitle.Text = "ESP"
+ContentTitle.TextColor3 = Color3.fromRGB(150, 255, 150)
+ContentTitle.TextSize = 20
+ContentTitle.TextXAlignment = Enum.TextXAlignment.Left
+ContentTitle.TextXAlignment = Enum.TextXAlignment.Center
+
+local ContentTitleCorner = Instance.new("UICorner")
+ContentTitleCorner.CornerRadius = UDim.new(0, 12)
+ContentTitleCorner.Parent = ContentTitle
+
+-- Прокручиваемая область для функций
+ContentScroll.Name = "ContentScroll"
+ContentScroll.Parent = ContentFrame
+ContentScroll.BackgroundTransparency = 1
+ContentScroll.BorderSizePixel = 0
+ContentScroll.Position = UDim2.new(0.05, 0, 0, 50)
+ContentScroll.Size = UDim2.new(0.9, 0, 1, -60)
+ContentScroll.ScrollBarThickness = 4
+ContentScroll.CanvasSize = UDim2.new(0, 0, 0, 400)
+
+-- Функция создания тоггла (пример для будущих функций)
+local function createToggle(parent, position, labelText)
+	local ToggleFrame = Instance.new("Frame")
+	ToggleFrame.Parent = parent
+	ToggleFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	ToggleFrame.BorderSizePixel = 0
+	ToggleFrame.Position = position
+	ToggleFrame.Size = UDim2.new(0, 320, 0, 35)
+	
+	local ToggleCorner = Instance.new("UICorner")
+	ToggleCorner.CornerRadius = UDim.new(0, 8)
+	ToggleCorner.Parent = ToggleFrame
+	
+	local Label = Instance.new("TextLabel")
+	Label.Parent = ToggleFrame
+	Label.BackgroundTransparency = 1
+	Label.Position = UDim2.new(0, 10, 0, 0)
+	Label.Size = UDim2.new(0.7, 0, 1, 0)
+	Label.Font = Enum.Font.Gotham
+	Label.Text = labelText
+	Label.TextColor3 = Color3.fromRGB(100, 100, 100)
+	Label.TextSize = 14
+	Label.TextXAlignment = Enum.TextXAlignment.Left
+	
+	local ToggleButton = Instance.new("TextButton")
+	ToggleButton.Parent = ToggleFrame
+	ToggleButton.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+	ToggleButton.BorderSizePixel = 0
+	ToggleButton.Position = UDim2.new(1, -55, 0.15, 0)
+	ToggleButton.Size = UDim2.new(0, 45, 0, 23)
+	ToggleButton.Text = ""
+	
+	local ToggleBtnCorner = Instance.new("UICorner")
+	ToggleBtnCorner.CornerRadius = UDim.new(1, 0)
+	ToggleBtnCorner.Parent = ToggleButton
+	
+	local ToggleCircle = Instance.new("Frame")
+	ToggleCircle.Parent = ToggleButton
+	ToggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	ToggleCircle.BorderSizePixel = 0
+	ToggleCircle.Position = UDim2.new(0, 2, 0.1, 0)
+	ToggleCircle.Size = UDim2.new(0, 18, 0, 18)
+	
+	local CircleCorner = Instance.new("UICorner")
+	CircleCorner.CornerRadius = UDim.new(1, 0)
+	CircleCorner.Parent = ToggleCircle
+	
+	local toggled = false
+	ToggleButton.MouseButton1Click:Connect(function()
+		toggled = not toggled
+		if toggled then
+			ToggleButton.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
+			ToggleCircle:TweenPosition(UDim2.new(1, -20, 0.1, 0), "Out", "Quad", 0.2, true)
+		else
+			ToggleButton.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+			ToggleCircle:TweenPosition(UDim2.new(0, 2, 0.1, 0), "Out", "Quad", 0.2, true)
+		end
+	end)
+	
+	return ToggleFrame, toggled
+end
+
+-- Примеры тогглов для раздела ESP (можно удалить потом)
+createToggle(ContentScroll, UDim2.new(0, 0, 0, 10), "ESP")
+createToggle(ContentScroll, UDim2.new(0, 0, 0, 55), "NOCLIP")
+
+-- Логика переключения разделов
+local function switchSection(button, sectionName, displayName)
+	-- Сброс цветов всех кнопок
+	PlayerButton.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+	PlayerButton.TextColor3 = Color3.fromRGB(100, 100, 100)
+	MainButton.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+	MainButton.TextColor3 = Color3.fromRGB(100, 100, 100)
+	ViborButton.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+	ViborButton.TextColor3 = Color3.fromRGB(100, 100, 100)
+	
+	-- Подсветка активной кнопки
+	button.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
+	button.TextColor3 = Color3.fromRGB(255, 255, 255)
+	
+	-- Смена заголовка
+	ContentTitle.Text = displayName
+	
+	-- Очистка контента (для будущих функций)
+	-- Здесь можно добавить логику загрузки разных функций для каждого раздела
+end
+
+-- Подключение кнопок разделов
+PlayerButton.MouseButton1Click:Connect(function()
+	switchSection(PlayerButton, "Player", "PLAYER")
+end)
+
+MainButton.MouseButton1Click:Connect(function()
+	switchSection(MainButton, "Main", "MAIN")
+end)
+
+ViborButton.MouseButton1Click:Connect(function()
+	switchSection(ViborButton, "Vibor", "VIBOR")
+end)
+
+-- Кнопка минимизации
+local isMinimized = false
+MinimizeButton.MouseButton1Click:Connect(function()
+	isMinimized = not isMinimized
+	if isMinimized then
+		MainFrame:TweenSize(UDim2.new(0, 450, 0, 45), "Out", "Quad", 0.3, true)
+	else
+		MainFrame:TweenSize(UDim2.new(0, 450, 0, 320), "Out", "Quad", 0.3, true)
+	end
+end)
+
+-- Кнопка закрытия
+CloseButton.MouseButton1Click:Connect(function()
+	ScreenGui:Destroy()
+end)
+
+-- Установка начального раздела
+switchSection(PlayerButton, "Player", "PLAYER")
+
+print("GUI загружен успешно!")
