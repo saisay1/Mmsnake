@@ -1,221 +1,128 @@
 --[[
-    COIN Collector для Xeno
-    Включение/выключение: нажмите "U" (или другую клавишу)
-    При активации: летит к ближайшей монете Coin_Server со скоростью 1.5
+    Universal Script Dumper for Xeno
+    Собирает информацию об активных скриптах и сохраняет в .txt файл
 --]]
 
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
+print("[Dumper] Начинаю сбор информации об активных скриптах...")
 
--- ========== НАСТРОЙКИ ==========
-local SPEED = 1.5                    -- Скорость полёта
-local TOGGLE_KEY = Enum.KeyCode.U    -- Клавиша для вкл/выкл
-local NOTIFY = true                  -- Показывать уведомления
+-- 1. Настройки
+local fileName = "script_dump_" .. os.date("%Y-%m-%d_%H-%M-%S") .. ".txt"
+local dumpData = {}
 
--- ========== ПЕРЕМЕННЫЕ ==========
-local isActive = false
-local currentTarget = nil
-local connection = nil
+-- 2. Функция для безопасного преобразования любого значения в строку
+local function serialize(value, depth)
+    depth = depth or 0
+    if depth > 5 then return " Max Depth Reached " end
 
--- ========== УВЕДОМЛЕНИЕ ==========
-local function notify(text, isError)
-    if not NOTIFY then return end
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "COIN Collector",
-        Text = text,
-        Duration = 2,
-        Icon = isError and "rbxassetid://238405577" or "rbxassetid://239867487"
-    })
-end
-
--- ========== ПОИСК БЛИЖАЙШЕЙ МОНЕТЫ ==========
-local function findNearestCoin()
-    local character = LocalPlayer.Character
-    if not character then return nil end
-    
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return nil end
-    
-    local currentPos = rootPart.Position
-    local nearestCoin = nil
-    local nearestDist = math.huge
-    
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj.Name == "Coin_Server" and obj:IsA("BasePart") and obj.Parent then
-            local dist = (currentPos - obj.Position).Magnitude
-            if dist < nearestDist then
-                nearestDist = dist
-                nearestCoin = obj
-            end
-        end
-    end
-    
-    return nearestCoin, nearestDist
-end
-
--- ========== ВКЛЮЧЕНИЕ ПОЛЁТА ==========
-local function enableFly()
-    if connection then
-        connection:Disconnect()
-        connection = nil
-    end
-    
-    isActive = true
-    
-    connection = RunService.Heartbeat:Connect(function()
-        if not isActive then return end
-        
-        local character = LocalPlayer.Character
-        if not character then return end
-        
-        local humanoid = character:FindFirstChild("Humanoid")
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
-        
-        if not humanoid or not rootPart then return end
-        
-        -- Проверка на жизнь
-        if humanoid.Health <= 0 then
-            disableFly()
-            notify("Персонаж мёртв, COIN выключен", true)
-            return
-        end
-        
-        -- Поиск ближайшей монеты
-        local targetCoin, distance = findNearestCoin()
-        
-        if targetCoin and targetCoin.Parent then
-            currentTarget = targetCoin
-            
-            -- Направление к монете
-            local direction = (targetCoin.Position - rootPart.Position).Unit
-            rootPart.Velocity = direction * SPEED
-            
-            -- Отключаем гравитацию
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            
-            -- Если подобрал монету (очень близко)
-            if distance < 3 then
-                -- Небольшая задержка, чтобы монета успела исчезнуть
-                task.wait(0.05)
-                currentTarget = nil
-            end
-        else
-            -- Нет монет на карте
-            rootPart.Velocity = Vector3.zero
-        end
-    end)
-    
-    notify("COIN включён, лечу к монетам!")
-    print("[COIN] Включён")
-end
-
--- ========== ВЫКЛЮЧЕНИЕ ПОЛЁТА ==========
-local function disableFly()
-    isActive = false
-    currentTarget = nil
-    
-    if connection then
-        connection:Disconnect()
-        connection = nil
-    end
-    
-    -- Восстанавливаем гравитацию
-    local character = LocalPlayer.Character
-    if character then
-        local humanoid = character:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
-            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
-        end
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
-        if rootPart then
-            rootPart.Velocity = Vector3.zero
-        end
-    end
-    
-    notify("COIN выключен")
-    print("[COIN] Выключен")
-end
-
--- ========== ПЕРЕКЛЮЧЕНИЕ ==========
-local function toggleCoin()
-    if isActive then
-        disableFly()
+    local valueType = type(value)
+    if valueType == "nil" then
+        return "nil"
+    elseif valueType == "string" then
+        return '"' .. value .. '"'
+    elseif valueType == "number" then
+        return tostring(value)
+    elseif valueType == "boolean" then
+        return tostring(value)
+    elseif valueType == "function" then
+        local info = debug.getinfo(value, "S")
+        local name = info and info.name or "unknown"
+        local source = info and info.short_src or "unknown"
+        return string.format("function(%s) [%s]", name, source)
+    elseif valueType == "table" then
+        return "table{...}"
     else
-        enableFly()
+        return tostring(value)
     end
 end
 
--- ========== СОЗДАНИЕ GUI КНОПКИ (простая) ==========
-local function createSimpleButton()
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "CoinCollector"
-    screenGui.Parent = game:GetService("CoreGui")
-    screenGui.ResetOnSpawn = false
-    
-    local button = Instance.new("TextButton")
-    button.Name = "CoinButton"
-    button.Parent = screenGui
-    button.Size = UDim2.new(0, 60, 0, 60)
-    button.Position = UDim2.new(0, 10, 0.5, -30)
-    button.BackgroundColor3 = Color3.fromRGB(80, 100, 200)
-    button.Text = "₿"
-    button.TextColor3 = Color3.fromRGB(255, 255, 255)
-    button.TextSize = 28
-    button.Font = Enum.Font.GothamBold
-    button.BorderSizePixel = 0
-    button.Draggable = true
-    button.Active = true
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(1, 0)
-    corner.Parent = button
-    
-    -- Обновление цвета кнопки при переключении
-    local updateButtonColor = function()
-        if isActive then
-            button.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
-        else
-            button.BackgroundColor3 = Color3.fromRGB(80, 100, 200)
+-- 3. Функция для рекурсивного обхода таблиц и сбора данных
+local function scanTable(tbl, name, path, depth, maxItems)
+    depth = depth or 0
+    maxItems = maxItems or 50
+    if depth > 3 then return end -- Ограничиваем глубину, чтобы файл не был слишком большим
+
+    if type(tbl) ~= "table" then return end
+
+    local itemCount = 0
+    for key, value in pairs(tbl) do
+        itemCount = itemCount + 1
+        if itemCount > maxItems then
+            table.insert(dumpData, string.rep("  ", depth) .. "... (and " .. (maxItems - itemCount) .. " more items)")
+            break
+        end
+
+        local keyStr = serialize(key, depth + 1)
+        local valueStr = serialize(value, depth + 1)
+        local currentPath = path .. "[" .. keyStr .. "]"
+
+        table.insert(dumpData, string.rep("  ", depth) .. currentPath .. " = " .. valueStr)
+
+        -- Рекурсивно сканируем вложенные таблицы
+        if type(value) == "table" and key ~= "_G" and key ~= "shared" then
+            scanTable(value, "", currentPath, depth + 1, maxItems)
         end
     end
-    
-    button.MouseButton1Click:Connect(function()
-        toggleCoin()
-        updateButtonColor()
-    end)
-    
-    updateButtonColor()
-    return button
 end
 
--- ========== ЗАПУСК ==========
-createSimpleButton()
+-- 4. Основная часть: сканируем глобальные хранилища
+table.insert(dumpData, "=== DUMP: _G (Global Environment) ===")
+scanTable(_G, "_G", "_G", 0, 30)
 
--- Горячая клавиша U
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == TOGGLE_KEY then
-        toggleCoin()
-        -- Обновляем цвет кнопки (находим её)
-        local gui = game:GetService("CoreGui"):FindFirstChild("CoinCollector")
-        if gui then
-            local btn = gui:FindFirstChild("CoinButton")
-            if btn then
-                if isActive then
-                    btn.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
-                else
-                    btn.BackgroundColor3 = Color3.fromRGB(80, 100, 200)
-                end
+table.insert(dumpData, "\n=== DUMP: shared (Shared Environment) ===")
+scanTable(shared, "shared", "shared", 0, 30)
+
+table.insert(dumpData, "\n=== DUMP: getgenv() (Executor's Global Environment) ===")
+local genv = getgenv()
+scanTable(genv, "getgenv()", "getgenv()", 0, 30)
+
+table.insert(dumpData, "\n=== DUMP: getfenv() (Current Function Environment) ===")
+local fenv = getfenv()
+if fenv ~= _G then
+    scanTable(fenv, "getfenv()", "getfenv()", 0, 30)
+else
+    table.insert(dumpData, "getfenv() is same as _G")
+end
+
+-- 5. Поиск специфичных для BedWars и CatV6 объектов
+table.insert(dumpData, "\n=== SEARCH: CatV6 / Vape Related Objects ===")
+local foundVape = false
+for i, obj in ipairs(getgc(true)) do
+    if type(obj) == "table" then
+        if rawget(obj, "vape") or rawget(obj, "Vape") then
+            table.insert(dumpData, "Found potential Vape table at index: " .. i)
+            scanTable(obj, "", "gc["..i.."]", 0, 20)
+            foundVape = true
+        elseif rawget(obj, "Categories") and rawget(obj, "Modules") then
+            table.insert(dumpData, "Found potential CatV6 module table at index: " .. i)
+            scanTable(obj, "", "gc["..i.."]", 0, 20)
+        end
+    elseif type(obj) == "function" then
+        local info = debug.getinfo(obj, "S")
+        if info and info.source then
+            local src = info.source:lower()
+            if src:find("catv6") or src:find("vertex") or src:find("vape") then
+                table.insert(dumpData, "Found function from script: " .. src)
             end
         end
     end
+end
+
+if not foundVape then
+    table.insert(dumpData, "No Vape/CatV6 related tables found in GC.")
+end
+
+-- 6. Сохраняем всё в файл
+local fullDump = table.concat(dumpData, "\n")
+local success, err = pcall(function()
+    writefile(fileName, fullDump)
 end)
 
-print("[COIN Collector] Загружен!")
-print("[COIN Collector] Кнопка ₿ слева по середине")
-print("[COIN Collector] Клавиша U для вкл/выкл")
+if success then
+    print("[Dumper] Успешно сохранено в файл: " .. fileName)
+    print("[Dumper] Размер файла: " .. #fullDump .. " символов")
+    print("[Dumper] Путь к файлу: " .. (getexecutorname and getexecutorname() or "папка с исполнителем"))
+else
+    print("[Dumper] Ошибка сохранения: " .. tostring(err))
+    print("[Dumper] Попытка вывести в консоль...")
+    print(fullDump)
+end
