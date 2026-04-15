@@ -1,0 +1,131 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+-- ПЕРЕМЕННЫЕ СОСТОЯНИЯ
+local farmEnabled = false
+local currentTarget = nil
+local speed = 1.5
+local coinName = "Coin_Server"
+
+-- СОЗДАНИЕ GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "CoinFarmGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 150, 0, 70)
+mainFrame.Position = UDim2.new(0.5, -75, 0.5, -35)
+mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true -- Позволяет перетаскивать (устаревший, но простой метод)
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = mainFrame
+
+local title = Instance.new("TextLabel")
+title.Text = "Farm Menu"
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundTransparency = 1
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 18
+title.Parent = mainFrame
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Name = "ToggleCoin"
+toggleBtn.Size = UDim2.new(0.8, 0, 0, 30)
+toggleBtn.Position = UDim2.new(0.1, 0, 0.45, 0)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Красный по умолчанию (выкл)
+toggleBtn.Text = "Coin: OFF"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Font = Enum.Font.SourceSans
+toggleBtn.TextSize = 16
+toggleBtn.Parent = mainFrame
+
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 5)
+btnCorner.Parent = toggleBtn
+
+-- ЛОГИКА ПЕРЕТАСКИВАНИЯ (улучшенная)
+local dragging, dragInput, dragStart, startPos
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- ФУНКЦИЯ ПОИСКА МОНЕТЫ
+local function getClosestCoin()
+    local closestCoin = nil
+    local shortestDistance = math.huge
+
+    for _, object in pairs(workspace:GetDescendants()) do
+        if object.Name == coinName and object:IsA("BasePart") then
+            local distance = (rootPart.Position - object.Position).Magnitude
+            if distance < shortestDistance then
+                shortestDistance = distance
+                closestCoin = object
+            end
+        end
+    end
+    return closestCoin
+end
+
+-- ОБРАБОТКА НАЖАТИЯ КНОПКИ
+toggleBtn.MouseButton1Click:Connect(function()
+    farmEnabled = not farmEnabled
+    if farmEnabled then
+        toggleBtn.Text = "Coin: ON"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50) -- Зеленый
+    else
+        toggleBtn.Text = "Coin: OFF"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Красный
+        currentTarget = nil
+    end
+end)
+
+-- ЦИКЛ ПОЛЕТА
+RunService.Heartbeat:Connect(function()
+    if not farmEnabled then return end
+    
+    -- Проверка персонажа (если умер)
+    if not character or not character:Parent then
+        character = player.Character or player.CharacterAdded:Wait()
+        rootPart = character:WaitForChild("HumanoidRootPart")
+    end
+
+    if not currentTarget or not currentTarget.Parent then
+        currentTarget = getClosestCoin()
+    end
+
+    if currentTarget then
+        local direction = (currentTarget.Position - rootPart.Position).Unit
+        rootPart.CFrame = rootPart.CFrame + (direction * speed)
+        rootPart.CFrame = CFrame.lookAt(rootPart.Position, currentTarget.Position)
+    end
+end)
