@@ -2,7 +2,6 @@
 local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
 local TopBar = Instance.new("Frame")
-local TitleLabel = Instance.new("TextLabel")
 local MinimizeButton = Instance.new("TextButton")
 local CloseButton = Instance.new("TextButton")
 local SideMenu = Instance.new("Frame")
@@ -45,49 +44,21 @@ local TopCorner = Instance.new("UICorner")
 TopCorner.CornerRadius = UDim.new(0, 15)
 TopCorner.Parent = TopBar
 
--- Название в топ-баре
-TitleLabel.Name = "TitleLabel"
-TitleLabel.Parent = TopBar
-TitleLabel.BackgroundTransparency = 1
-TitleLabel.Position = UDim2.new(0.15, 0, 0, 0)
-TitleLabel.Size = UDim2.new(0.5, 0, 1, 0)
-TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.Text = "НАУКА"
-TitleLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-TitleLabel.TextSize = 24
-TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-
--- Кнопка минимизации (скрыть GUI)
+-- Кнопка скрытия GUI (верхняя, белая)
 MinimizeButton.Name = "MinimizeButton"
 MinimizeButton.Parent = TopBar
-MinimizeButton.BackgroundColor3 = Color3.fromRGB(200, 255, 200)
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(230, 230, 230)
 MinimizeButton.BorderSizePixel = 0
-MinimizeButton.Position = UDim2.new(1, -80, 0.2, 0)
-MinimizeButton.Size = UDim2.new(0, 30, 0, 27)
+MinimizeButton.Position = UDim2.new(1, -45, 0.25, 0)
+MinimizeButton.Size = UDim2.new(0, 30, 0, 23)
 MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.Text = "—"
+MinimizeButton.Text = ""
 MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 MinimizeButton.TextSize = 20
 
 local MinCorner = Instance.new("UICorner")
-MinCorner.CornerRadius = UDim.new(0, 8)
+MinCorner.CornerRadius = UDim.new(1, 0)
 MinCorner.Parent = MinimizeButton
-
--- Кнопка закрытия (ярко-зелёная)
-CloseButton.Name = "CloseButton"
-CloseButton.Parent = TopBar
-CloseButton.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
-CloseButton.BorderSizePixel = 0
-CloseButton.Position = UDim2.new(1, -40, 0.2, 0)
-CloseButton.Size = UDim2.new(0, 30, 0, 27)
-CloseButton.Font = Enum.Font.GothamBold
-CloseButton.Text = "×"
-CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseButton.TextSize = 24
-
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 8)
-CloseCorner.Parent = CloseButton
 
 -- Боковое меню (слева)
 SideMenu.Name = "SideMenu"
@@ -153,6 +124,22 @@ ContentFrame.BorderSizePixel = 0
 ContentFrame.Position = UDim2.new(0, 60, 0, 45)
 ContentFrame.Size = UDim2.new(1, -60, 1, -45)
 
+-- Кнопка закрытия (нижняя правая, ярко-зелёная)
+CloseButton.Name = "CloseButton"
+CloseButton.Parent = ContentFrame
+CloseButton.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
+CloseButton.BorderSizePixel = 0
+CloseButton.Position = UDim2.new(1, -45, 1, -45)
+CloseButton.Size = UDim2.new(0, 35, 0, 35)
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.Text = "×"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 28
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 10)
+CloseCorner.Parent = CloseButton
+
 -- Заголовок раздела (белое облако)
 ContentTitle.Name = "ContentTitle"
 ContentTitle.Parent = ContentFrame
@@ -177,11 +164,11 @@ ContentScroll.Parent = ContentFrame
 ContentScroll.BackgroundTransparency = 1
 ContentScroll.BorderSizePixel = 0
 ContentScroll.Position = UDim2.new(0.05, 0, 0, 50)
-ContentScroll.Size = UDim2.new(0.9, 0, 1, -60)
+ContentScroll.Size = UDim2.new(0.9, 0, 1, -100)
 ContentScroll.ScrollBarThickness = 4
 ContentScroll.CanvasSize = UDim2.new(0, 0, 0, 400)
 
--- Функция создания тоггла (пример для будущих функций)
+-- Функция создания тоггла
 local function createToggle(parent, position, labelText)
 	local ToggleFrame = Instance.new("Frame")
 	ToggleFrame.Parent = parent
@@ -243,7 +230,7 @@ local function createToggle(parent, position, labelText)
 	return ToggleFrame, toggled
 end
 
--- Примеры тогглов для раздела ESP (можно удалить потом)
+-- Примеры тогглов для раздела ESP
 createToggle(ContentScroll, UDim2.new(0, 0, 0, 10), "ESP")
 createToggle(ContentScroll, UDim2.new(0, 0, 0, 55), "NOCLIP")
 
@@ -263,9 +250,6 @@ local function switchSection(button, sectionName, displayName)
 	
 	-- Смена заголовка
 	ContentTitle.Text = displayName
-	
-	-- Очистка контента (для будущих функций)
-	-- Здесь можно добавить логику загрузки разных функций для каждого раздела
 end
 
 -- Подключение кнопок разделов
@@ -281,7 +265,7 @@ ViborButton.MouseButton1Click:Connect(function()
 	switchSection(ViborButton, "Vibor", "VIBOR")
 end)
 
--- Кнопка минимизации
+-- Кнопка скрытия (верхняя белая)
 local isMinimized = false
 MinimizeButton.MouseButton1Click:Connect(function()
 	isMinimized = not isMinimized
@@ -292,7 +276,7 @@ MinimizeButton.MouseButton1Click:Connect(function()
 	end
 end)
 
--- Кнопка закрытия
+-- Кнопка закрытия (нижняя ярко-зелёная)
 CloseButton.MouseButton1Click:Connect(function()
 	ScreenGui:Destroy()
 end)
