@@ -6,6 +6,7 @@ local CoreGui = game:GetService("CoreGui")
 local player = Players.LocalPlayer
 local coinName = "Coin_Server"
 local speed = 1.5
+local coinRadius = 30 -- Твой лимит в 30 блоков
 local farmEnabled = false
 local noclipEnabled = false
 local currentTarget = nil
@@ -15,7 +16,6 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "EgorPrimeSystem"
 screenGui.ResetOnSpawn = false
 
--- Попытка поместить в CoreGui
 local success, err = pcall(function()
     screenGui.Parent = CoreGui
 end)
@@ -25,7 +25,7 @@ end
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 160, 0, 120) -- Увеличил высоту для второй кнопки
+mainFrame.Size = UDim2.new(0, 160, 0, 120)
 mainFrame.Position = UDim2.new(0.5, -80, 0.5, -60)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 mainFrame.BorderSizePixel = 0
@@ -37,7 +37,7 @@ corner.CornerRadius = UDim.new(0, 10)
 corner.Parent = mainFrame
 
 local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(80, 80, 255) -- Синий контур для "Прайм" стиля
+stroke.Color = Color3.fromRGB(80, 80, 255)
 stroke.Thickness = 2
 stroke.Parent = mainFrame
 
@@ -114,17 +114,19 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- ФУНКЦИЯ ПОИСКА МОНЕТЫ
-local function getClosestCoin()
+-- УЛУЧШЕННАЯ ФУНКЦИЯ ПОИСКА С РАДИУСОМ
+local function getClosestCoinInRange()
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return nil end
 
-    local closest, dist = nil, math.huge
+    local closest, dist = nil, coinRadius -- Изначально ставим лимит 30 блоков
+
     for _, object in pairs(workspace:GetDescendants()) do
         if object.Name == coinName and object:IsA("BasePart") then
             local distance = (root.Position - object.Position).Magnitude
-            if distance < dist then
+            -- Проверяем, входит ли монета в наш лимит 30 блоков
+            if distance <= dist then
                 dist = distance
                 closest = object
             end
@@ -147,25 +149,25 @@ noclipBtn.MouseButton1Click:Connect(function()
     noclipBtn.BackgroundColor3 = noclipEnabled and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
 end)
 
--- ЦИКЛ ФАРМА И ПОЛЕТА
+-- ЦИКЛ ФАРМА
 RunService.Heartbeat:Connect(function()
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
+    if not root or not farmEnabled then return end
 
-    if farmEnabled then
-        if not currentTarget or not currentTarget.Parent then
-            currentTarget = getClosestCoin()
-        end
-        if currentTarget then
-            local direction = (currentTarget.Position - root.Position).Unit
-            root.CFrame = root.CFrame + (direction * speed)
-            root.CFrame = CFrame.lookAt(root.Position, currentTarget.Position)
-        end
+    -- Если текущей цели нет, она исчезла или вышла за радиус 30 блоков
+    if not currentTarget or not currentTarget.Parent or (currentTarget.Position - root.Position).Magnitude > coinRadius + 5 then
+        currentTarget = getClosestCoinInRange()
+    end
+
+    if currentTarget then
+        local direction = (currentTarget.Position - root.Position).Unit
+        root.CFrame = root.CFrame + (direction * speed)
+        root.CFrame = CFrame.lookAt(root.Position, currentTarget.Position)
     end
 end)
 
--- ОТДЕЛЬНЫЙ ЦИКЛ ДЛЯ NOCLIP (используем Stepped, чтобы отключать коллизию до просчета физики)
+-- ЦИКЛ NOCLIP
 RunService.Stepped:Connect(function()
     if noclipEnabled and player.Character then
         for _, part in pairs(player.Character:GetDescendants()) do
