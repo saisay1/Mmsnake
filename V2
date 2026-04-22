@@ -6,11 +6,12 @@ local CoreGui = game:GetService("CoreGui")
 local player = Players.LocalPlayer
 local coinName = "Coin_Server"
 local speed = 23 
-local coinRadius = 500
+local coinRadius = 600 
 local farmEnabled = false
 local noclipEnabled = false
 local currentTarget = nil
-local lastStableY = nil -- Для предотвращения скатывания вниз
+local lastStableY = nil
+local isWaiting = false -- Флаг ожидания сбора
 
 local ignoredCoins = {} 
 
@@ -147,12 +148,13 @@ toggleBtn.MouseButton1Click:Connect(function()
     
     if farmEnabled then
         if hum then hum.PlatformStand = true end
-        if root then lastStableY = root.Position.Y end -- Запоминаем высоту
+        if root then lastStableY = root.Position.Y end
     else
         if hum then hum.PlatformStand = false end
         currentTarget = nil 
         ignoredCoins = {}
         lastStableY = nil
+        isWaiting = false
     end
 end)
 
@@ -169,13 +171,16 @@ RunService.Heartbeat:Connect(function(dt)
     
     if not root or not farmEnabled then return end
 
-    -- ПОЛНАЯ ОСТАНОВКА ФИЗИКИ (чтобы не скатываться)
+    -- Остановка физики
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
-    -- Если цели нет, держим текущую высоту
-    if not currentTarget and lastStableY then
-        root.CFrame = CFrame.new(root.Position.X, lastStableY, root.Position.Z) * root.CFrame.Rotation
+    -- Если сейчас пауза 0.5 сек, стоим на месте и ничего не делаем
+    if isWaiting then 
+        if currentTarget and currentTarget.Parent then
+            root.CFrame = CFrame.new(currentTarget.Position) * root.CFrame.Rotation
+        end
+        return 
     end
 
     -- Логика сбора
@@ -185,32 +190,39 @@ RunService.Heartbeat:Connect(function(dt)
         else
             local distToCoin = (currentTarget.Position - root.Position).Magnitude
             
-            -- Если подлетели вплотную (увеличил до 3.5 для надежности)
-            if distToCoin < 3.5 then
-                local coinToIgnore = currentTarget
-                ignoredCoins[coinToIgnore] = true
-                task.delay(3, function() ignoredCoins[coinToIgnore] = nil end)
+            -- Если долетели до монеты
+            if distToCoin < 1.5 then
+                isWaiting = true -- Включаем режим ожидания
+                
+                task.wait(0.5) -- Пауза 0.5 сек для гарантии сбора
+                
+                if currentTarget then
+                    local coinToIgnore = currentTarget
+                    ignoredCoins[coinToIgnore] = true
+                    task.delay(3, function() ignoredCoins[coinToIgnore] = nil end)
+                end
+                
                 currentTarget = nil 
-                lastStableY = root.Position.Y -- Обновляем высоту после сбора
+                isWaiting = false -- Выключаем режим ожидания
+                if root then lastStableY = root.Position.Y end
             end
         end
     end
 
-    -- Ищем новую цель ТОЛЬКО если старой нет
-    if not currentTarget then
+    -- Ищем новую цель
+    if not currentTarget and not isWaiting then
         currentTarget = getClosestCoinInRange()
     end
 
-    -- ДВИЖЕНИЕ
-    if currentTarget then
+    -- Движение
+    if currentTarget and not isWaiting then
         local targetPos = currentTarget.Position
         local direction = (targetPos - root.Position).Unit
-        
-        -- Движение без наклона торса (сохраняем текущую ротацию)
         root.CFrame = CFrame.new(root.Position + (direction * (speed * dt))) * root.CFrame.Rotation
-        
-        -- Обновляем стабильную высоту во время полета
         lastStableY = root.Position.Y 
+    elseif not currentTarget and lastStableY then
+        -- Удержание высоты, если нет цели
+        root.CFrame = CFrame.new(root.Position.X, lastStableY, root.Position.Z) * root.CFrame.Rotation
     end
 end)
 
