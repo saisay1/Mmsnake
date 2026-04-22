@@ -5,15 +5,14 @@ local CoreGui = game:GetService("CoreGui")
 
 local player = Players.LocalPlayer
 local coinName = "Coin_Server"
-local speed = 23 -- Установлено по твоему запросу
-local coinRadius = 500 -- Радиус на всю карту
-local waitTime = 0.2 -- Задержка на монете
+local speed = 23 
+local coinRadius = 500 
+local waitTime = 0.2 
 local farmEnabled = false
 local noclipEnabled = false
 local currentTarget = nil
 local lastStableY = nil
 local isWaiting = false
-local firstTargetFound = false -- Для моментального ТП к первой монете
 
 local ignoredCoins = {} 
 
@@ -86,7 +85,7 @@ local noclipCorner = Instance.new("UICorner")
 noclipCorner.CornerRadius = UDim.new(0, 6)
 noclipCorner.Parent = noclipBtn
 
--- ЛОГИКА ПЕРЕТАСКИВАНИЯ (Упрощенная)
+-- ЛОГИКА ПЕРЕТАСКИВАНИЯ
 local dragging, dragInput, dragStart, startPos
 mainFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -129,7 +128,6 @@ toggleBtn.MouseButton1Click:Connect(function()
     local hum = char and char:FindFirstChild("Humanoid")
     if farmEnabled then
         if hum then hum.PlatformStand = true end
-        firstTargetFound = false -- Сбрасываем флаг, чтобы при включении был ТП
     else
         if hum then hum.PlatformStand = false end
         currentTarget = nil; ignoredCoins = {}; isWaiting = false
@@ -148,9 +146,11 @@ RunService.Heartbeat:Connect(function(dt)
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root or not farmEnabled then return end
 
+    -- Заморозка физики
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
+    -- Ожидание сбора
     if isWaiting then 
         if currentTarget and currentTarget.Parent then
             root.CFrame = CFrame.new(currentTarget.Position) * root.CFrame.Rotation
@@ -158,6 +158,7 @@ RunService.Heartbeat:Connect(function(dt)
         return 
     end
 
+    -- Логика достижения цели
     if currentTarget then
         if not currentTarget.Parent or not currentTarget:IsDescendantOf(workspace) then
             currentTarget = nil
@@ -177,17 +178,12 @@ RunService.Heartbeat:Connect(function(dt)
         end
     end
 
+    -- Поиск новой цели (без телепортации)
     if not currentTarget and not isWaiting then
         currentTarget = getClosestCoinInRange()
-        
-        -- РЕШЕНИЕ ПРОБЛЕМЫ С ПОЯВЛЕНИЕМ СВЕРХУ:
-        -- Если это первая найденная монета после старта, делаем мгновенный ТП
-        if currentTarget and not firstTargetFound then
-            root.CFrame = CFrame.new(currentTarget.Position) * root.CFrame.Rotation
-            firstTargetFound = true
-        end
     end
 
+    -- Плавное движение к цели
     if currentTarget and not isWaiting then
         local direction = (currentTarget.Position - root.Position).Unit
         root.CFrame = CFrame.new(root.Position + (direction * (speed * dt))) * root.CFrame.Rotation
