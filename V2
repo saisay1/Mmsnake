@@ -108,7 +108,7 @@ UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then update(input) end
 end)
 
--- СБРОС ПРИ СМЕРТИ/РЕСПАВНЕ
+-- СБРОС
 local function resetFarm()
     ignoredCoins  = {}
     currentTarget = nil
@@ -184,14 +184,14 @@ RunService.Heartbeat:Connect(function(dt)
         local hum  = char and char:FindFirstChild("Humanoid")
         if hum and hum.Health > 0 then
             local vu = game:GetService("VirtualUser")
-            vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            vu:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
             task.wait(0.1)
-            vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            vu:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
         end
     end
 end)
 
--- NOCLIP — отдельный цикл, гарантируем отключение коллизий каждый кадр
+-- NOCLIP
 RunService.Stepped:Connect(function()
     if (noclipEnabled or farmEnabled) and player.Character then
         for _, part in pairs(player.Character:GetDescendants()) do
@@ -203,18 +203,18 @@ RunService.Stepped:Connect(function()
 end)
 
 -- ГЛАВНЫЙ ЦИКЛ ФАРМА
-RunService.Heartbeat:Connect(function(dt)
+-- PreSimulation срабатывает ДО физического шага,
+-- поэтому движок не успевает откатить позицию назад при столкновении
+RunService.PreSimulation:Connect(function(dt)
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root or not farmEnabled then return end
 
-    -- Гасим физику полностью — это и есть главный фикс застревания в партах:
-    -- движок не успевает толкнуть персонажа назад если мы каждый кадр
-    -- пишем CFrame напрямую, но только если скорости уже обнулены
+    -- Обнуляем скорость до и после — движку нечего применять
     root.AssemblyLinearVelocity  = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
-    -- Сброс таргета если вне радиуса или удалён
+    -- Сброс таргета если удалён или вне радиуса
     if currentTarget then
         if not currentTarget:IsDescendantOf(workspace)
         or (currentTarget.Position - root.Position).Magnitude > coinRadius then
@@ -222,7 +222,7 @@ RunService.Heartbeat:Connect(function(dt)
         end
     end
 
-    -- Ожидание после подбора — стоим там где стоим, без смещений
+    -- Ожидание после подбора — стоим на месте
     if isWaiting then return end
 
     -- Достигли монеты?
@@ -251,17 +251,18 @@ RunService.Heartbeat:Connect(function(dt)
 
     if currentTarget then
         local diff = currentTarget.Position - root.Position
-
-        -- Фикс застревания: если вектор слишком маленький (почти на месте) — пропускаем
         if diff.Magnitude < 0.01 then return end
 
-        -- Летим прямо к монете — точно так же как и обычно,
-        -- смещения нет, поэтому торс придёт прямо к монете как при полёте
         local newPos = root.Position + diff.Unit * (speed * dt)
         root.CFrame = CFrame.new(newPos)
 
+        -- Обнуляем ПОСЛЕ записи CFrame — ключевой фикс застревания
+        root.AssemblyLinearVelocity  = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+
     elseif lastStableY then
-        -- Нет цели — фиксируем позицию
         root.CFrame = CFrame.new(root.Position.X, lastStableY, root.Position.Z)
+        root.AssemblyLinearVelocity  = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
     end
 end)
