@@ -5,7 +5,7 @@ local CoreGui = game:GetService("CoreGui")
 
 local player = Players.LocalPlayer
 local coinName = "Coin_Server"
-local speed = 16 -- Теперь это стандартная скорость (как WalkSpeed)
+local speed = 30 -- Теперь это стандартная скорость (как WalkSpeed)
 local coinRadius = 500 
 local farmEnabled = false
 local noclipEnabled = false
