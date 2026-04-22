@@ -191,26 +191,31 @@ RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
--- NOCLIP
-RunService.Stepped:Connect(function()
-    if (noclipEnabled or farmEnabled) and player.Character then
-        for _, part in pairs(player.Character:GetDescendants()) do
+-- ЕДИНЫЙ ЦИКЛ: нoclip + фарм в одном PreSimulation
+-- Сначала отключаем коллизии, ПОТОМ двигаемся —
+-- движок обрабатывает всё это до физического шага
+RunService.PreSimulation:Connect(function(dt)
+    local char = player.Character
+    if not char then return end
+
+    local root = char:FindFirstChild("HumanoidRootPart")
+
+    -- НOCLIP: отключаем коллизии первым делом, до любого движения
+    if noclipEnabled or farmEnabled then
+        for _, part in pairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.CanCollide = false
             end
         end
+        -- Дополнительно отключаем у самого root напрямую
+        if root then
+            root.CanCollide = false
+        end
     end
-end)
 
--- ГЛАВНЫЙ ЦИКЛ ФАРМА
--- PreSimulation срабатывает ДО физического шага,
--- поэтому движок не успевает откатить позицию назад при столкновении
-RunService.PreSimulation:Connect(function(dt)
-    local char = player.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root or not farmEnabled then return end
 
-    -- Обнуляем скорость до и после — движку нечего применять
+    -- Полностью глушим физику
     root.AssemblyLinearVelocity  = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
@@ -222,7 +227,6 @@ RunService.PreSimulation:Connect(function(dt)
         end
     end
 
-    -- Ожидание после подбора — стоим на месте
     if isWaiting then return end
 
     -- Достигли монеты?
@@ -256,7 +260,7 @@ RunService.PreSimulation:Connect(function(dt)
         local newPos = root.Position + diff.Unit * (speed * dt)
         root.CFrame = CFrame.new(newPos)
 
-        -- Обнуляем ПОСЛЕ записи CFrame — ключевой фикс застревания
+        -- Обнуляем скорость после CFrame — движку нечего применять
         root.AssemblyLinearVelocity  = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
 
