@@ -127,7 +127,7 @@ local function makeDropBtn(text, posY)
     return btn
 end
 
-local btn90       = makeDropBtn("90% (рядом)",    5)
+local btn90       = makeDropBtn("90% (рядом)",     5)
 local btn100      = makeDropBtn("100% (в монету)", 34)
 local btnFastAuto = makeDropBtn("FAST AUTO: OFF",  63)
 
@@ -225,6 +225,31 @@ end
 if player.Character then onCharacterAdded(player.Character) end
 player.CharacterAdded:Connect(onCharacterAdded)
 
+-- Получить смещение Y чтобы стоять ногами
+local function getHipOffset(char)
+    local hum = char and char:FindFirstChild("Humanoid")
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hum and hrp then
+        return hum.HipHeight + hrp.Size.Y / 2
+    end
+    return 2.5
+end
+
+-- Проверка: есть ли вообще монеты в радиусе (не в игноре)
+local function anyCoinsInRange()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj.Name == coinName and obj:IsA("BasePart") then
+            if (root.Position - obj.Position).Magnitude <= coinRadius then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 -- ПОИСК МОНЕТЫ
 local function getClosestCoinInRange()
     local char = player.Character
@@ -292,14 +317,22 @@ RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
--- NOCLIP
+-- НOCLIP — каждый кадр до физики через Stepped
+-- Фикс бага с торсом: явно перебираем все BasePart включая торс по имени
 RunService.Stepped:Connect(function()
-    if (noclipEnabled or farmEnabled) and player.Character then
-        for _, part in pairs(player.Character:GetDescendants()) do
+    local char = player.Character
+    if not char then return end
+    if noclipEnabled or farmEnabled then
+        for _, part in pairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.CanCollide = false
             end
         end
+        -- Явно отключаем торс на случай если он был пропущен
+        local torso = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+        if torso then torso.CanCollide = false end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hrp then hrp.CanCollide = false end
     end
 end)
 
@@ -321,15 +354,25 @@ RunService.Heartbeat:Connect(function(dt)
         end
     end
 
-    -- Режим 100%: пока ждём — телепортируемся прямо в монету как в первом скрипте
+    -- Пункт 2: если в радиусе вообще нет монет — сбрасываем игнор-лист
+    if not anyCoinsInRange() then
+        ignoredCoins = {}
+    end
+
     if isWaiting then
+        -- Режим 100%: держимся ногами над монетой пока ждём
         if collectMode == "100" and currentTarget and currentTarget.Parent then
-            root.CFrame = CFrame.new(currentTarget.Position) * root.CFrame.Rotation
+            local hipOffset = getHipOffset(char)
+            root.CFrame = CFrame.new(
+                currentTarget.Position.X,
+                currentTarget.Position.Y + hipOffset,
+                currentTarget.Position.Z
+            )
         end
         return
     end
 
-    -- Fast Auto: если летим дольше 2.5 сек — пропускаем монету
+    -- Fast Auto
     if fastAutoEnabled and currentTarget then
         targetTimer = targetTimer + dt
         if targetTimer >= 2.5 then
@@ -344,18 +387,20 @@ RunService.Heartbeat:Connect(function(dt)
     -- Достигли монеты?
     if currentTarget then
         local dist = (currentTarget.Position - root.Position).Magnitude
-
-        -- 90%: останавливаемся на dist < 2 (рядом с монетой)
-        -- 100%: летим до dist < 0.5 (прямо в монету)
         local stopDist = (collectMode == "100") and 0.5 or 2
 
         if dist < stopDist then
             isWaiting = true
             targetTimer = 0
 
-            -- Режим 100%: сразу телепортируемся прямо в монету
+            -- Режим 100%: телепортируемся ногами в монету
             if collectMode == "100" then
-                root.CFrame = CFrame.new(currentTarget.Position) * root.CFrame.Rotation
+                local hipOffset = getHipOffset(char)
+                root.CFrame = CFrame.new(
+                    currentTarget.Position.X,
+                    currentTarget.Position.Y + hipOffset,
+                    currentTarget.Position.Z
+                )
             end
 
             task.wait(0.2)
