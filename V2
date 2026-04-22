@@ -16,17 +16,13 @@ local isWaiting = false
 
 local ignoredCoins = {}
 
--- СОЗДАНИЕ GUI
+-- GUI
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "EgorPrimeSystem"
 screenGui.ResetOnSpawn = false
 
-local success, err = pcall(function()
-    screenGui.Parent = CoreGui
-end)
-if not success then
-    screenGui.Parent = player:WaitForChild("PlayerGui")
-end
+local success = pcall(function() screenGui.Parent = CoreGui end)
+if not success then screenGui.Parent = player:WaitForChild("PlayerGui") end
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
@@ -76,7 +72,7 @@ local toggleBtn  = makeBtn("COIN: OFF",    35)
 local noclipBtn  = makeBtn("NOCLIP: OFF",  72)
 local antiAfkBtn = makeBtn("ANTIAFK: OFF", 109)
 
--- ЛОГИКА ПЕРЕТАСКИВАНИЯ
+-- ПЕРЕТАСКИВАНИЕ
 local dragging, dragInput, dragStart, startPos
 
 local function update(input)
@@ -112,57 +108,51 @@ UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then update(input) end
 end)
 
--- СБРОС ПРИ СМЕРТИ (пункт 1)
-local function onCharacterAdded(char)
-    local hum = char:WaitForChild("Humanoid")
+-- СБРОС ПРИ СМЕРТИ/РЕСПАВНЕ
+local function resetFarm()
+    ignoredCoins  = {}
+    currentTarget = nil
+    isWaiting     = false
+    lastStableY   = nil
+end
 
-    hum.Died:Connect(function()
-        -- Обнуляем всё связанное с фармом
-        ignoredCoins  = {}
-        currentTarget = nil
-        isWaiting     = false
-        lastStableY   = nil
-    end)
+local function onCharacterAdded(char)
+    resetFarm()
+    local hum = char:WaitForChild("Humanoid")
+    hum.Died:Connect(resetFarm)
 end
 
 if player.Character then onCharacterAdded(player.Character) end
 player.CharacterAdded:Connect(onCharacterAdded)
 
--- ФУНКЦИЯ ПОИСКА
+-- ПОИСК МОНЕТЫ
 local function getClosestCoinInRange()
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return nil end
 
     local closest, dist = nil, coinRadius
-
-    for _, object in pairs(workspace:GetDescendants()) do
-        if object.Name == coinName and object:IsA("BasePart") and not ignoredCoins[object] then
-            local distance = (root.Position - object.Position).Magnitude
-            if distance <= dist then
-                dist     = distance
-                closest  = object
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj.Name == coinName and obj:IsA("BasePart") and not ignoredCoins[obj] then
+            local d = (root.Position - obj.Position).Magnitude
+            if d <= dist then
+                dist    = d
+                closest = obj
             end
         end
     end
     return closest
 end
 
--- ОБРАБОТКА КНОПОК
+-- КНОПКИ
 toggleBtn.MouseButton1Click:Connect(function()
     farmEnabled = not farmEnabled
     toggleBtn.Text = farmEnabled and "COIN: ON" or "COIN: OFF"
     toggleBtn.BackgroundColor3 = farmEnabled
-        and Color3.fromRGB(50, 150, 50)
-        or  Color3.fromRGB(150, 50, 50)
+        and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
 
     if not farmEnabled then
-        -- Выключили — сбрасываем всё
-        currentTarget = nil
-        ignoredCoins  = {}
-        lastStableY   = nil
-        isWaiting     = false
-
+        resetFarm()
         local char = player.Character
         local hum  = char and char:FindFirstChild("Humanoid")
         if hum then hum.PlatformStand = false end
@@ -173,77 +163,77 @@ noclipBtn.MouseButton1Click:Connect(function()
     noclipEnabled = not noclipEnabled
     noclipBtn.Text = noclipEnabled and "NOCLIP: ON" or "NOCLIP: OFF"
     noclipBtn.BackgroundColor3 = noclipEnabled
-        and Color3.fromRGB(50, 150, 50)
-        or  Color3.fromRGB(150, 50, 50)
+        and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
 end)
 
--- ANTIAFK (пункт 3) — как в Infinite Yield
 antiAfkBtn.MouseButton1Click:Connect(function()
     antiAfkEnabled = not antiAfkEnabled
     antiAfkBtn.Text = antiAfkEnabled and "ANTIAFK: ON" or "ANTIAFK: OFF"
     antiAfkBtn.BackgroundColor3 = antiAfkEnabled
-        and Color3.fromRGB(50, 150, 50)
-        or  Color3.fromRGB(150, 50, 50)
+        and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
 end)
 
--- Петля AntiAFK: фейковый прыжок каждые ~60 сек
+-- ANTIAFK
 local antiAfkTimer = 0
 RunService.Heartbeat:Connect(function(dt)
-    if antiAfkEnabled then
-        antiAfkTimer = antiAfkTimer + dt
-        if antiAfkTimer >= 60 then
-            antiAfkTimer = 0
-            local char = player.Character
-            local hum  = char and char:FindFirstChild("Humanoid")
-            if hum and hum.Health > 0 then
-                -- Имитируем нажатие прыжка через VirtualUser (без реального движения)
-                local vu = game:GetService("VirtualUser")
-                vu:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-                task.wait(0.1)
-                vu:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-            end
-        end
-    else
+    if not antiAfkEnabled then antiAfkTimer = 0 return end
+    antiAfkTimer = antiAfkTimer + dt
+    if antiAfkTimer >= 60 then
         antiAfkTimer = 0
+        local char = player.Character
+        local hum  = char and char:FindFirstChild("Humanoid")
+        if hum and hum.Health > 0 then
+            local vu = game:GetService("VirtualUser")
+            vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            task.wait(0.1)
+            vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        end
     end
 end)
 
--- ГЛАВНЫЙ ЦИКЛ ФАРМА (пункт 2 — прямолинейное движение как поезд)
+-- NOCLIP — отдельный цикл, гарантируем отключение коллизий каждый кадр
+RunService.Stepped:Connect(function()
+    if (noclipEnabled or farmEnabled) and player.Character then
+        for _, part in pairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
+-- ГЛАВНЫЙ ЦИКЛ ФАРМА
 RunService.Heartbeat:Connect(function(dt)
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
-
     if not root or not farmEnabled then return end
 
-    -- Полностью фиксируем физику
+    -- Гасим физику полностью — это и есть главный фикс застревания в партах:
+    -- движок не успевает толкнуть персонажа назад если мы каждый кадр
+    -- пишем CFrame напрямую, но только если скорости уже обнулены
     root.AssemblyLinearVelocity  = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
-    -- Ожидание после подбора монеты
-    if isWaiting then
-        if currentTarget and currentTarget.Parent then
-            root.CFrame = CFrame.new(currentTarget.Position)
+    -- Сброс таргета если вне радиуса или удалён
+    if currentTarget then
+        if not currentTarget:IsDescendantOf(workspace)
+        or (currentTarget.Position - root.Position).Magnitude > coinRadius then
+            currentTarget = nil
         end
-        return
     end
 
-    -- Проверяем, жив ли текущий таргет
-    if currentTarget and not currentTarget:IsDescendantOf(workspace) then
-        currentTarget = nil
-    end
+    -- Ожидание после подбора — стоим там где стоим, без смещений
+    if isWaiting then return end
 
     -- Достигли монеты?
     if currentTarget then
         local dist = (currentTarget.Position - root.Position).Magnitude
-        if dist < 1.5 then
+        if dist < 2 then
             isWaiting = true
-
             task.wait(0.2)
-
             local coinToIgnore = currentTarget
             ignoredCoins[coinToIgnore] = true
             task.delay(3, function() ignoredCoins[coinToIgnore] = nil end)
-
             currentTarget = nil
             isWaiting     = false
             if root then lastStableY = root.Position.Y end
@@ -259,28 +249,19 @@ RunService.Heartbeat:Connect(function(dt)
         end
     end
 
-    -- Движение: строго прямо к монете, без поворотов, как поезд по рельсам
     if currentTarget then
-        local targetPos = currentTarget.Position
-        local newPos    = root.Position + (targetPos - root.Position).Unit * (speed * dt)
+        local diff = currentTarget.Position - root.Position
 
-        -- CFrame без ротации — персонаж не наклоняется и не поворачивается
+        -- Фикс застревания: если вектор слишком маленький (почти на месте) — пропускаем
+        if diff.Magnitude < 0.01 then return end
+
+        -- Летим прямо к монете — точно так же как и обычно,
+        -- смещения нет, поэтому торс придёт прямо к монете как при полёте
+        local newPos = root.Position + diff.Unit * (speed * dt)
         root.CFrame = CFrame.new(newPos)
-    else
-        -- Нет цели — стоим на месте (фиксируем Y)
-        if lastStableY then
-            root.CFrame = CFrame.new(root.Position.X, lastStableY, root.Position.Z)
-        end
-    end
-end)
 
--- NOCLIP ЦИКЛ
-RunService.Stepped:Connect(function()
-    if (noclipEnabled or farmEnabled) and player.Character then
-        for _, part in pairs(player.Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
+    elseif lastStableY then
+        -- Нет цели — фиксируем позицию
+        root.CFrame = CFrame.new(root.Position.X, lastStableY, root.Position.Z)
     end
 end)
