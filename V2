@@ -5,7 +5,7 @@ local CoreGui = game:GetService("CoreGui")
 
 local player = Players.LocalPlayer
 local coinName = "Coin_Server"
-local speed = 30 -- Теперь это стандартная скорость (как WalkSpeed)
+local speed = 40 -- Скорость как WalkSpeed (16 - дефолт)
 local coinRadius = 500 
 local farmEnabled = false
 local noclipEnabled = false
@@ -139,6 +139,13 @@ toggleBtn.MouseButton1Click:Connect(function()
     farmEnabled = not farmEnabled
     toggleBtn.Text = farmEnabled and "COIN: ON" or "COIN: OFF"
     toggleBtn.BackgroundColor3 = farmEnabled and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
+    
+    local char = player.Character
+    local hum = char and char:FindFirstChild("Humanoid")
+    if hum then
+        hum.PlatformStand = farmEnabled -- Включаем режим полета
+    end
+
     if not farmEnabled then 
         currentTarget = nil 
         ignoredCoins = {}
@@ -151,16 +158,26 @@ noclipBtn.MouseButton1Click:Connect(function()
     noclipBtn.BackgroundColor3 = noclipEnabled and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
 end)
 
--- ЦИКЛ ФАРМА С КОРРЕКТНОЙ СКОРОСТЬЮ
-RunService.Heartbeat:Connect(function(dt) -- Добавили dt (delta time)
+-- ЦИКЛ ФАРМА
+RunService.Heartbeat:Connect(function(dt)
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
-    if not root or not farmEnabled then return end
+    local hum = char and char:FindFirstChild("Humanoid")
+    
+    if not root or not farmEnabled then 
+        if hum and hum.PlatformStand and not farmEnabled then
+            hum.PlatformStand = false -- Возвращаем физику, если фарм выключен
+        end
+        return 
+    end
+
+    -- Обнуляем скорость, чтобы не падать под действием гравитации
+    root.Velocity = Vector3.new(0, 0, 0)
+    root.RotVelocity = Vector3.new(0, 0, 0)
 
     if currentTarget and currentTarget.Parent then
         local distToCoin = (currentTarget.Position - root.Position).Magnitude
         
-        -- Если коснулись монеты (3 студа)
         if distToCoin < 3 then
             local coinToIgnore = currentTarget
             ignoredCoins[coinToIgnore] = true
@@ -177,9 +194,6 @@ RunService.Heartbeat:Connect(function(dt) -- Добавили dt (delta time)
 
     if currentTarget then
         local direction = (currentTarget.Position - root.Position).Unit
-        
-        -- РАСЧЕТ ДВИЖЕНИЯ: скорость * время кадра
-        -- Теперь 16 будет ощущаться как стандартный бег
         root.CFrame = root.CFrame + (direction * (speed * dt))
         root.CFrame = CFrame.lookAt(root.Position, currentTarget.Position)
     end
@@ -187,7 +201,7 @@ end)
 
 -- ЦИКЛ NOCLIP
 RunService.Stepped:Connect(function()
-    if noclipEnabled and player.Character then
+    if (noclipEnabled or farmEnabled) and player.Character then
         for _, part in pairs(player.Character:GetDescendants()) do
             if part:IsA("BasePart") and part.CanCollide then
                 part.CanCollide = false
