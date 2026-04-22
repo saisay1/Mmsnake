@@ -5,11 +5,12 @@ local CoreGui = game:GetService("CoreGui")
 
 local player = Players.LocalPlayer
 local coinName = "Coin_Server"
-local speed = 23 -- Скорость как WalkSpeed (16 - дефолт)
-local coinRadius = 500 
+local speed = 23 
+local coinRadius = 500
 local farmEnabled = false
 local noclipEnabled = false
 local currentTarget = nil
+local lastStableY = nil -- Для предотвращения скатывания вниз
 
 local ignoredCoins = {} 
 
@@ -141,14 +142,17 @@ toggleBtn.MouseButton1Click:Connect(function()
     toggleBtn.BackgroundColor3 = farmEnabled and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
     
     local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
     local hum = char and char:FindFirstChild("Humanoid")
-    if hum then
-        hum.PlatformStand = farmEnabled -- Включаем режим полета
-    end
-
-    if not farmEnabled then 
+    
+    if farmEnabled then
+        if hum then hum.PlatformStand = true end
+        if root then lastStableY = root.Position.Y end -- Запоминаем высоту
+    else
+        if hum then hum.PlatformStand = false end
         currentTarget = nil 
         ignoredCoins = {}
+        lastStableY = nil
     end
 end)
 
@@ -162,40 +166,51 @@ end)
 RunService.Heartbeat:Connect(function(dt)
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChild("Humanoid")
     
-    if not root or not farmEnabled then 
-        if hum and hum.PlatformStand and not farmEnabled then
-            hum.PlatformStand = false -- Возвращаем физику, если фарм выключен
-        end
-        return 
+    if not root or not farmEnabled then return end
+
+    -- ПОЛНАЯ ОСТАНОВКА ФИЗИКИ (чтобы не скатываться)
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
+
+    -- Если цели нет, держим текущую высоту
+    if not currentTarget and lastStableY then
+        root.CFrame = CFrame.new(root.Position.X, lastStableY, root.Position.Z) * root.CFrame.Rotation
     end
 
-    -- Обнуляем скорость, чтобы не падать под действием гравитации
-    root.Velocity = Vector3.new(0, 0, 0)
-    root.RotVelocity = Vector3.new(0, 0, 0)
-
-    if currentTarget and currentTarget.Parent then
-        local distToCoin = (currentTarget.Position - root.Position).Magnitude
-        
-        if distToCoin < 3 then
-            local coinToIgnore = currentTarget
-            ignoredCoins[coinToIgnore] = true
-            task.delay(4, function()
-                ignoredCoins[coinToIgnore] = nil
-            end)
-            currentTarget = nil 
+    -- Логика сбора
+    if currentTarget then
+        if not currentTarget.Parent or not currentTarget:IsDescendantOf(workspace) then
+            currentTarget = nil
+        else
+            local distToCoin = (currentTarget.Position - root.Position).Magnitude
+            
+            -- Если подлетели вплотную (увеличил до 3.5 для надежности)
+            if distToCoin < 3.5 then
+                local coinToIgnore = currentTarget
+                ignoredCoins[coinToIgnore] = true
+                task.delay(3, function() ignoredCoins[coinToIgnore] = nil end)
+                currentTarget = nil 
+                lastStableY = root.Position.Y -- Обновляем высоту после сбора
+            end
         end
     end
 
-    if not currentTarget or not currentTarget.Parent then
+    -- Ищем новую цель ТОЛЬКО если старой нет
+    if not currentTarget then
         currentTarget = getClosestCoinInRange()
     end
 
+    -- ДВИЖЕНИЕ
     if currentTarget then
-        local direction = (currentTarget.Position - root.Position).Unit
-        root.CFrame = root.CFrame + (direction * (speed * dt))
-        root.CFrame = CFrame.lookAt(root.Position, currentTarget.Position)
+        local targetPos = currentTarget.Position
+        local direction = (targetPos - root.Position).Unit
+        
+        -- Движение без наклона торса (сохраняем текущую ротацию)
+        root.CFrame = CFrame.new(root.Position + (direction * (speed * dt))) * root.CFrame.Rotation
+        
+        -- Обновляем стабильную высоту во время полета
+        lastStableY = root.Position.Y 
     end
 end)
 
@@ -203,7 +218,7 @@ end)
 RunService.Stepped:Connect(function()
     if (noclipEnabled or farmEnabled) and player.Character then
         for _, part in pairs(player.Character:GetDescendants()) do
-            if part:IsA("BasePart") and part.CanCollide then
+            if part:IsA("BasePart") then
                 part.CanCollide = false
             end
         end
