@@ -7,12 +7,11 @@ local player = Players.LocalPlayer
 local coinName = "Coin_Server"
 local speed = 23 
 local coinRadius = 500 
-local waitTime = 0.2 
 local farmEnabled = false
 local noclipEnabled = false
 local currentTarget = nil
 local lastStableY = nil
-local isWaiting = false
+local isWaiting = false 
 
 local ignoredCoins = {} 
 
@@ -87,16 +86,33 @@ noclipCorner.Parent = noclipBtn
 
 -- ЛОГИКА ПЕРЕТАСКИВАНИЯ
 local dragging, dragInput, dragStart, startPos
+local function update(input)
+    local delta = input.Position - dragStart
+    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
 mainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true; dragStart = input.Position; startPos = mainFrame.Position
-        input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
     end
 end)
+
+mainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
 UserInputService.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    if input == dragInput and dragging then
+        update(input)
     end
 end)
 
@@ -105,7 +121,9 @@ local function getClosestCoinInRange()
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return nil end
+
     local closest, dist = nil, coinRadius
+
     for _, object in pairs(workspace:GetDescendants()) do
         if object.Name == coinName and object:IsA("BasePart") and not ignoredCoins[object] then
             local distance = (root.Position - object.Position).Magnitude
@@ -125,12 +143,18 @@ toggleBtn.MouseButton1Click:Connect(function()
     toggleBtn.BackgroundColor3 = farmEnabled and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
     
     local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
     local hum = char and char:FindFirstChild("Humanoid")
+    
     if farmEnabled then
         if hum then hum.PlatformStand = true end
+        if root then lastStableY = root.Position.Y end
     else
         if hum then hum.PlatformStand = false end
-        currentTarget = nil; ignoredCoins = {}; isWaiting = false
+        currentTarget = nil 
+        ignoredCoins = {}
+        lastStableY = nil
+        isWaiting = false
     end
 end)
 
@@ -144,13 +168,12 @@ end)
 RunService.Heartbeat:Connect(function(dt)
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
+    
     if not root or not farmEnabled then return end
 
-    -- Заморозка физики
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
-    -- Ожидание сбора
     if isWaiting then 
         if currentTarget and currentTarget.Parent then
             root.CFrame = CFrame.new(currentTarget.Position) * root.CFrame.Rotation
@@ -158,35 +181,41 @@ RunService.Heartbeat:Connect(function(dt)
         return 
     end
 
-    -- Логика достижения цели
     if currentTarget then
         if not currentTarget.Parent or not currentTarget:IsDescendantOf(workspace) then
             currentTarget = nil
         else
             local distToCoin = (currentTarget.Position - root.Position).Magnitude
-            if distToCoin < 2 then
-                isWaiting = true
-                task.wait(waitTime) -- 0.2 сек
+            
+            if distToCoin < 1.5 then
+                isWaiting = true 
+                
+                task.wait(0.2) -- ТУТ ИЗМЕНЕНО: Задержка теперь 0.2 секунды
+                
                 if currentTarget then
-                    local c = currentTarget
-                    ignoredCoins[c] = true
-                    task.delay(3, function() ignoredCoins[c] = nil end)
+                    local coinToIgnore = currentTarget
+                    ignoredCoins[coinToIgnore] = true
+                    task.delay(3, function() ignoredCoins[coinToIgnore] = nil end)
                 end
-                currentTarget = nil
-                isWaiting = false
+                
+                currentTarget = nil 
+                isWaiting = false 
+                if root then lastStableY = root.Position.Y end
             end
         end
     end
 
-    -- Поиск новой цели (без телепортации)
     if not currentTarget and not isWaiting then
         currentTarget = getClosestCoinInRange()
     end
 
-    -- Плавное движение к цели
     if currentTarget and not isWaiting then
-        local direction = (currentTarget.Position - root.Position).Unit
+        local targetPos = currentTarget.Position
+        local direction = (targetPos - root.Position).Unit
         root.CFrame = CFrame.new(root.Position + (direction * (speed * dt))) * root.CFrame.Rotation
+        lastStableY = root.Position.Y 
+    elseif not currentTarget and lastStableY then
+        root.CFrame = CFrame.new(root.Position.X, lastStableY, root.Position.Z) * root.CFrame.Rotation
     end
 end)
 
@@ -194,7 +223,9 @@ end)
 RunService.Stepped:Connect(function()
     if (noclipEnabled or farmEnabled) and player.Character then
         for _, part in pairs(player.Character:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = false end
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
         end
     end
 end)
