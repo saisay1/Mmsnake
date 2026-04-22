@@ -6,7 +6,7 @@ local CoreGui = game:GetService("CoreGui")
 local player = Players.LocalPlayer
 local coinName = "Coin_Server"
 local speed = 1.5
-local coinRadius = 600 -- Твой лимит в 30 блоков
+local coinRadius = 30 
 local farmEnabled = false
 local noclipEnabled = false
 local currentTarget = nil
@@ -114,18 +114,18 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- УЛУЧШЕННАЯ ФУНКЦИЯ ПОИСКА С РАДИУСОМ
+-- ФУНКЦИЯ ПОИСКА
 local function getClosestCoinInRange()
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return nil end
 
-    local closest, dist = nil, coinRadius -- Изначально ставим лимит 30 блоков
+    local closest, dist = nil, coinRadius
 
     for _, object in pairs(workspace:GetDescendants()) do
-        if object.Name == coinName and object:IsA("BasePart") then
+        -- Добавляем проверку, что это монета и она не является нашей текущей "отработанной" целью
+        if object.Name == coinName and object:IsA("BasePart") and object ~= currentTarget then
             local distance = (root.Position - object.Position).Magnitude
-            -- Проверяем, входит ли монета в наш лимит 30 блоков
             if distance <= dist then
                 dist = distance
                 closest = object
@@ -155,8 +155,18 @@ RunService.Heartbeat:Connect(function()
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root or not farmEnabled then return end
 
-    -- Если текущей цели нет, она исчезла или вышла за радиус 30 блоков
-    if not currentTarget or not currentTarget.Parent or (currentTarget.Position - root.Position).Magnitude > coinRadius + 5 then
+    -- Если цель есть, проверяем дистанцию до неё
+    if currentTarget and currentTarget.Parent then
+        local distToCoin = (currentTarget.Position - root.Position).Magnitude
+        
+        -- ИСПРАВЛЕНИЕ: Если мы уже очень близко (меньше 2 блоков), сбрасываем цель
+        if distToCoin < 2 then
+            currentTarget = nil 
+        end
+    end
+
+    -- Если цели нет или она пропала/вышла за радиус
+    if not currentTarget or not currentTarget.Parent or (currentTarget.Position - root.Position).Magnitude > coinRadius + 2 then
         currentTarget = getClosestCoinInRange()
     end
 
