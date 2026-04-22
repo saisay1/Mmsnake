@@ -5,13 +5,12 @@ local CoreGui = game:GetService("CoreGui")
 
 local player = Players.LocalPlayer
 local coinName = "Coin_Server"
-local speed = 0.2
+local speed = 16 -- Теперь это стандартная скорость (как WalkSpeed)
 local coinRadius = 500 
 local farmEnabled = false
 local noclipEnabled = false
 local currentTarget = nil
 
--- ТАБЛИЦА ИГНОРИРОВАНИЯ (Чтобы не висеть на собранных монетах)
 local ignoredCoins = {} 
 
 -- СОЗДАНИЕ GUI
@@ -115,7 +114,7 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- ФУНКЦИЯ ПОИСКА С ИГНОРИРОВАНИЕМ
+-- ФУНКЦИЯ ПОИСКА
 local function getClosestCoinInRange()
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -124,7 +123,6 @@ local function getClosestCoinInRange()
     local closest, dist = nil, coinRadius
 
     for _, object in pairs(workspace:GetDescendants()) do
-        -- Проверяем: имя совпадает И это Part И монеты нет в списке игнорируемых
         if object.Name == coinName and object:IsA("BasePart") and not ignoredCoins[object] then
             local distance = (root.Position - object.Position).Magnitude
             if distance <= dist then
@@ -143,7 +141,7 @@ toggleBtn.MouseButton1Click:Connect(function()
     toggleBtn.BackgroundColor3 = farmEnabled and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
     if not farmEnabled then 
         currentTarget = nil 
-        ignoredCoins = {} -- Очищаем список при выключении
+        ignoredCoins = {}
     end
 end)
 
@@ -153,8 +151,8 @@ noclipBtn.MouseButton1Click:Connect(function()
     noclipBtn.BackgroundColor3 = noclipEnabled and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
 end)
 
--- ЦИКЛ ФАРМА
-RunService.Heartbeat:Connect(function()
+-- ЦИКЛ ФАРМА С КОРРЕКТНОЙ СКОРОСТЬЮ
+RunService.Heartbeat:Connect(function(dt) -- Добавили dt (delta time)
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root or not farmEnabled then return end
@@ -162,28 +160,27 @@ RunService.Heartbeat:Connect(function()
     if currentTarget and currentTarget.Parent then
         local distToCoin = (currentTarget.Position - root.Position).Magnitude
         
-        -- Если мы подлетели вплотную (меньше 3 блоков)
+        -- Если коснулись монеты (3 студа)
         if distToCoin < 3 then
-            -- Добавляем монету в игнор-лист на 4 секунды
             local coinToIgnore = currentTarget
             ignoredCoins[coinToIgnore] = true
             task.delay(4, function()
                 ignoredCoins[coinToIgnore] = nil
             end)
-            
-            -- Сбрасываем текущую цель, чтобы сразу искать новую
             currentTarget = nil 
         end
     end
 
-    -- Поиск новой цели
     if not currentTarget or not currentTarget.Parent then
         currentTarget = getClosestCoinInRange()
     end
 
     if currentTarget then
         local direction = (currentTarget.Position - root.Position).Unit
-        root.CFrame = root.CFrame + (direction * speed)
+        
+        -- РАСЧЕТ ДВИЖЕНИЯ: скорость * время кадра
+        -- Теперь 16 будет ощущаться как стандартный бег
+        root.CFrame = root.CFrame + (direction * (speed * dt))
         root.CFrame = CFrame.lookAt(root.Position, currentTarget.Position)
     end
 end)
