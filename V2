@@ -5,13 +5,15 @@ local CoreGui = game:GetService("CoreGui")
 
 local player = Players.LocalPlayer
 local coinName = "Coin_Server"
-local speed = 23 
-local coinRadius = 600 
+local speed = 23 -- Установлено по твоему запросу
+local coinRadius = 500 -- Радиус на всю карту
+local waitTime = 0.2 -- Задержка на монете
 local farmEnabled = false
 local noclipEnabled = false
 local currentTarget = nil
 local lastStableY = nil
-local isWaiting = false -- Флаг ожидания сбора
+local isWaiting = false
+local firstTargetFound = false -- Для моментального ТП к первой монете
 
 local ignoredCoins = {} 
 
@@ -84,35 +86,18 @@ local noclipCorner = Instance.new("UICorner")
 noclipCorner.CornerRadius = UDim.new(0, 6)
 noclipCorner.Parent = noclipBtn
 
--- ЛОГИКА ПЕРЕТАСКИВАНИЯ
+-- ЛОГИКА ПЕРЕТАСКИВАНИЯ (Упрощенная)
 local dragging, dragInput, dragStart, startPos
-local function update(input)
-    local delta = input.Position - dragStart
-    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-end
-
 mainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = mainFrame.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true; dragStart = input.Position; startPos = mainFrame.Position
+        input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
     end
 end)
-
-mainFrame.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
-
 UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        update(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
 end)
 
@@ -121,9 +106,7 @@ local function getClosestCoinInRange()
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return nil end
-
     local closest, dist = nil, coinRadius
-
     for _, object in pairs(workspace:GetDescendants()) do
         if object.Name == coinName and object:IsA("BasePart") and not ignoredCoins[object] then
             local distance = (root.Position - object.Position).Magnitude
@@ -143,18 +126,13 @@ toggleBtn.MouseButton1Click:Connect(function()
     toggleBtn.BackgroundColor3 = farmEnabled and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
     
     local char = player.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
     local hum = char and char:FindFirstChild("Humanoid")
-    
     if farmEnabled then
         if hum then hum.PlatformStand = true end
-        if root then lastStableY = root.Position.Y end
+        firstTargetFound = false -- Сбрасываем флаг, чтобы при включении был ТП
     else
         if hum then hum.PlatformStand = false end
-        currentTarget = nil 
-        ignoredCoins = {}
-        lastStableY = nil
-        isWaiting = false
+        currentTarget = nil; ignoredCoins = {}; isWaiting = false
     end
 end)
 
@@ -168,14 +146,11 @@ end)
 RunService.Heartbeat:Connect(function(dt)
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
-    
     if not root or not farmEnabled then return end
 
-    -- Остановка физики
     root.AssemblyLinearVelocity = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
-    -- Если сейчас пауза 0.5 сек, стоим на месте и ничего не делаем
     if isWaiting then 
         if currentTarget and currentTarget.Parent then
             root.CFrame = CFrame.new(currentTarget.Position) * root.CFrame.Rotation
@@ -183,46 +158,39 @@ RunService.Heartbeat:Connect(function(dt)
         return 
     end
 
-    -- Логика сбора
     if currentTarget then
         if not currentTarget.Parent or not currentTarget:IsDescendantOf(workspace) then
             currentTarget = nil
         else
             local distToCoin = (currentTarget.Position - root.Position).Magnitude
-            
-            -- Если долетели до монеты
-            if distToCoin < 1.5 then
-                isWaiting = true -- Включаем режим ожидания
-                
-                task.wait(0.5) -- Пауза 0.5 сек для гарантии сбора
-                
+            if distToCoin < 2 then
+                isWaiting = true
+                task.wait(waitTime) -- 0.2 сек
                 if currentTarget then
-                    local coinToIgnore = currentTarget
-                    ignoredCoins[coinToIgnore] = true
-                    task.delay(3, function() ignoredCoins[coinToIgnore] = nil end)
+                    local c = currentTarget
+                    ignoredCoins[c] = true
+                    task.delay(3, function() ignoredCoins[c] = nil end)
                 end
-                
-                currentTarget = nil 
-                isWaiting = false -- Выключаем режим ожидания
-                if root then lastStableY = root.Position.Y end
+                currentTarget = nil
+                isWaiting = false
             end
         end
     end
 
-    -- Ищем новую цель
     if not currentTarget and not isWaiting then
         currentTarget = getClosestCoinInRange()
+        
+        -- РЕШЕНИЕ ПРОБЛЕМЫ С ПОЯВЛЕНИЕМ СВЕРХУ:
+        -- Если это первая найденная монета после старта, делаем мгновенный ТП
+        if currentTarget and not firstTargetFound then
+            root.CFrame = CFrame.new(currentTarget.Position) * root.CFrame.Rotation
+            firstTargetFound = true
+        end
     end
 
-    -- Движение
     if currentTarget and not isWaiting then
-        local targetPos = currentTarget.Position
-        local direction = (targetPos - root.Position).Unit
+        local direction = (currentTarget.Position - root.Position).Unit
         root.CFrame = CFrame.new(root.Position + (direction * (speed * dt))) * root.CFrame.Rotation
-        lastStableY = root.Position.Y 
-    elseif not currentTarget and lastStableY then
-        -- Удержание высоты, если нет цели
-        root.CFrame = CFrame.new(root.Position.X, lastStableY, root.Position.Z) * root.CFrame.Rotation
     end
 end)
 
@@ -230,9 +198,7 @@ end)
 RunService.Stepped:Connect(function()
     if (noclipEnabled or farmEnabled) and player.Character then
         for _, part in pairs(player.Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
+            if part:IsA("BasePart") then part.CanCollide = false end
         end
     end
 end)
