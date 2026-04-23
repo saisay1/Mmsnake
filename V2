@@ -326,7 +326,7 @@ RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
--- НOCLIP — HumanoidStateType.Physics отключает проверку пола у Humanoid
+-- НOCLIP — Physics state отключает проверку пола/стен у Humanoid
 RunService.Stepped:Connect(function()
     local char = player.Character
     local hum = char and char:FindFirstChild("Humanoid")
@@ -337,8 +337,6 @@ RunService.Stepped:Connect(function()
                 part.CanCollide = false
             end
         end
-        -- Ключевой фикс: Physics state отключает внутренние проверки
-        -- Humanoid на столкновение с полом/стенами
         if hum and hum:GetState() ~= Enum.HumanoidStateType.Physics then
             hum:ChangeState(Enum.HumanoidStateType.Physics)
         end
@@ -355,6 +353,9 @@ RunService.Heartbeat:Connect(function(dt)
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root or not farmEnabled then return end
 
+    -- Обнуляем ВСЕ скорости каждый кадр — это и есть фикс падения:
+    -- Physics state убирает антигравитацию Humanoid, но мы сами
+    -- не даём гравитации накопить скорость вниз
     root.AssemblyLinearVelocity  = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
@@ -380,6 +381,9 @@ RunService.Heartbeat:Connect(function(dt)
                 currentTarget.Position.Z
             )
         end
+        -- Фикс падения при ожидании: снова обнуляем скорость
+        root.AssemblyLinearVelocity  = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
         return
     end
 
@@ -438,10 +442,12 @@ RunService.Heartbeat:Connect(function(dt)
         local newPos = root.Position + diff.Unit * (speed * dt)
         root.CFrame = CFrame.new(newPos)
 
+        -- Обнуляем после записи CFrame — гравитация не успевает потянуть вниз
         root.AssemblyLinearVelocity  = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
 
     elseif lastStableY then
+        -- Нет цели — жёстко фиксируем Y чтобы не падать
         root.CFrame = CFrame.new(root.Position.X, lastStableY, root.Position.Z)
         root.AssemblyLinearVelocity  = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
