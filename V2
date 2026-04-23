@@ -19,6 +19,9 @@ local collectMode = "90"
 local fastAutoEnabled = false
 local targetTimer = 0
 
+-- Флаг: летим прямо сейчас или нет
+local isFlying = false
+
 -- GUI
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "EgorPrimeSystem"
@@ -214,6 +217,7 @@ local function resetFarm()
     isWaiting     = false
     lastStableY   = nil
     targetTimer   = 0
+    isFlying      = false
 end
 
 local function onCharacterAdded(char)
@@ -294,7 +298,7 @@ noclipBtn.MouseButton1Click:Connect(function()
     noclipBtn.BackgroundColor3 = noclipEnabled
         and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
 
-    if not noclipEnabled then
+    if not noclipEnabled and not farmEnabled then
         local char = player.Character
         local hum  = char and char:FindFirstChild("Humanoid")
         if hum then hum:ChangeState(Enum.HumanoidStateType.GettingUp) end
@@ -326,21 +330,28 @@ RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
--- НOCLIP — Physics state отключает проверку пола/стен у Humanoid
+-- НOCLIP + управление Physics state
 RunService.Stepped:Connect(function()
     local char = player.Character
     local hum = char and char:FindFirstChild("Humanoid")
+    if not char or not hum then return end
 
-    if char and (noclipEnabled or farmEnabled) then
+    -- Noclip всегда отключает коллизии если включён
+    if noclipEnabled or farmEnabled then
         for _, part in pairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.CanCollide = false
             end
         end
-        if hum and hum:GetState() ~= Enum.HumanoidStateType.Physics then
+    end
+
+    -- Physics state включаем ТОЛЬКО когда реально летим к монете
+    -- Когда монет нет — возвращаем нормальное состояние чтобы не падать
+    if farmEnabled and isFlying then
+        if hum:GetState() ~= Enum.HumanoidStateType.Physics then
             hum:ChangeState(Enum.HumanoidStateType.Physics)
         end
-    elseif char and hum then
+    else
         if hum:GetState() == Enum.HumanoidStateType.Physics then
             hum:ChangeState(Enum.HumanoidStateType.GettingUp)
         end
@@ -353,12 +364,6 @@ RunService.Heartbeat:Connect(function(dt)
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root or not farmEnabled then return end
 
-    -- Обнуляем ВСЕ скорости каждый кадр — это и есть фикс падения:
-    -- Physics state убирает антигравитацию Humanoid, но мы сами
-    -- не даём гравитации накопить скорость вниз
-    root.AssemblyLinearVelocity  = Vector3.zero
-    root.AssemblyAngularVelocity = Vector3.zero
-
     if currentTarget then
         if not currentTarget:IsDescendantOf(workspace)
         or (currentTarget.Position - root.Position).Magnitude > coinRadius then
@@ -368,8 +373,11 @@ RunService.Heartbeat:Connect(function(dt)
     end
 
     -- Сброс игнора если монет в радиусе нет вообще
-    if not anyCoinsInRange() then
+    local coinsExist = anyCoinsInRange()
+    if not coinsExist then
         ignoredCoins = {}
+        isFlying = false  -- выключаем Physics state — персонаж встанет нормально
+        return
     end
 
     if isWaiting then
@@ -380,10 +388,9 @@ RunService.Heartbeat:Connect(function(dt)
                 currentTarget.Position.Y + hipOffset,
                 currentTarget.Position.Z
             )
+            root.AssemblyLinearVelocity  = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
         end
-        -- Фикс падения при ожидании: снова обнуляем скорость
-        root.AssemblyLinearVelocity  = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
         return
     end
 
@@ -405,6 +412,7 @@ RunService.Heartbeat:Connect(function(dt)
 
         if dist < stopDist then
             isWaiting = true
+            isFlying  = false
             targetTimer = 0
 
             if collectMode == "100" then
@@ -439,17 +447,14 @@ RunService.Heartbeat:Connect(function(dt)
         local diff = currentTarget.Position - root.Position
         if diff.Magnitude < 0.01 then return end
 
+        isFlying = true  -- летим — включаем Physics state для прохождения стен
+
         local newPos = root.Position + diff.Unit * (speed * dt)
         root.CFrame = CFrame.new(newPos)
-
-        -- Обнуляем после записи CFrame — гравитация не успевает потянуть вниз
         root.AssemblyLinearVelocity  = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
 
-    elseif lastStableY then
-        -- Нет цели — жёстко фиксируем Y чтобы не падать
-        root.CFrame = CFrame.new(root.Position.X, lastStableY, root.Position.Z)
-        root.AssemblyLinearVelocity  = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
+    else
+        isFlying = false  -- нет цели — выключаем Physics state, не падаем
     end
 end)
