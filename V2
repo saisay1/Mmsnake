@@ -229,16 +229,6 @@ end
 if player.Character then onCharacterAdded(player.Character) end
 player.CharacterAdded:Connect(onCharacterAdded)
 
--- Смещение чтобы стоять ногами
-local function getHipOffset(char)
-    local hum = char and char:FindFirstChild("Humanoid")
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if hum and hrp then
-        return hum.HipHeight + hrp.Size.Y / 2
-    end
-    return 2.5
-end
-
 -- Есть ли монеты в радиусе вообще
 local function anyCoinsInRange()
     local char = player.Character
@@ -336,7 +326,6 @@ RunService.Stepped:Connect(function()
     local hum = char and char:FindFirstChild("Humanoid")
     if not char or not hum then return end
 
-    -- Noclip всегда отключает коллизии если включён
     if noclipEnabled or farmEnabled then
         for _, part in pairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
@@ -345,8 +334,7 @@ RunService.Stepped:Connect(function()
         end
     end
 
-    -- Physics state включаем ТОЛЬКО когда реально летим к монете
-    -- Когда монет нет — возвращаем нормальное состояние чтобы не падать
+    -- Physics state только когда реально летим к монете
     if farmEnabled and isFlying then
         if hum:GetState() ~= Enum.HumanoidStateType.Physics then
             hum:ChangeState(Enum.HumanoidStateType.Physics)
@@ -373,21 +361,16 @@ RunService.Heartbeat:Connect(function(dt)
     end
 
     -- Сброс игнора если монет в радиусе нет вообще
-    local coinsExist = anyCoinsInRange()
-    if not coinsExist then
+    if not anyCoinsInRange() then
         ignoredCoins = {}
-        isFlying = false  -- выключаем Physics state — персонаж встанет нормально
+        isFlying = false
         return
     end
 
     if isWaiting then
+        -- Режим 100%: телепорт прямо в центр монеты, без смещения
         if collectMode == "100" and currentTarget and currentTarget.Parent then
-            local hipOffset = getHipOffset(char)
-            root.CFrame = CFrame.new(
-                currentTarget.Position.X,
-                currentTarget.Position.Y + hipOffset,
-                currentTarget.Position.Z
-            )
+            root.CFrame = CFrame.new(currentTarget.Position)
             root.AssemblyLinearVelocity  = Vector3.zero
             root.AssemblyAngularVelocity = Vector3.zero
         end
@@ -415,13 +398,9 @@ RunService.Heartbeat:Connect(function(dt)
             isFlying  = false
             targetTimer = 0
 
+            -- Режим 100%: телепорт прямо в монету без смещения
             if collectMode == "100" then
-                local hipOffset = getHipOffset(char)
-                root.CFrame = CFrame.new(
-                    currentTarget.Position.X,
-                    currentTarget.Position.Y + hipOffset,
-                    currentTarget.Position.Z
-                )
+                root.CFrame = CFrame.new(currentTarget.Position)
             end
 
             task.wait(0.2)
@@ -447,7 +426,7 @@ RunService.Heartbeat:Connect(function(dt)
         local diff = currentTarget.Position - root.Position
         if diff.Magnitude < 0.01 then return end
 
-        isFlying = true  -- летим — включаем Physics state для прохождения стен
+        isFlying = true
 
         local newPos = root.Position + diff.Unit * (speed * dt)
         root.CFrame = CFrame.new(newPos)
@@ -455,6 +434,6 @@ RunService.Heartbeat:Connect(function(dt)
         root.AssemblyAngularVelocity = Vector3.zero
 
     else
-        isFlying = false  -- нет цели — выключаем Physics state, не падаем
+        isFlying = false
     end
 end)
