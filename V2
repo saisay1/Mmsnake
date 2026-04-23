@@ -225,7 +225,7 @@ end
 if player.Character then onCharacterAdded(player.Character) end
 player.CharacterAdded:Connect(onCharacterAdded)
 
--- Получить смещение Y чтобы стоять ногами
+-- Смещение чтобы стоять ногами
 local function getHipOffset(char)
     local hum = char and char:FindFirstChild("Humanoid")
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -235,7 +235,7 @@ local function getHipOffset(char)
     return 2.5
 end
 
--- Проверка: есть ли вообще монеты в радиусе (не в игноре)
+-- Есть ли монеты в радиусе вообще
 local function anyCoinsInRange()
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -280,7 +280,10 @@ toggleBtn.MouseButton1Click:Connect(function()
         resetFarm()
         local char = player.Character
         local hum  = char and char:FindFirstChild("Humanoid")
-        if hum then hum.PlatformStand = false end
+        if hum then
+            hum.PlatformStand = false
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end
         dropdown.Visible = false
     end
 end)
@@ -290,6 +293,12 @@ noclipBtn.MouseButton1Click:Connect(function()
     noclipBtn.Text = noclipEnabled and "NOCLIP: ON" or "NOCLIP: OFF"
     noclipBtn.BackgroundColor3 = noclipEnabled
         and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
+
+    if not noclipEnabled then
+        local char = player.Character
+        local hum  = char and char:FindFirstChild("Humanoid")
+        if hum then hum:ChangeState(Enum.HumanoidStateType.GettingUp) end
+    end
 end)
 
 antiAfkBtn.MouseButton1Click:Connect(function()
@@ -317,22 +326,26 @@ RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
--- НOCLIP — каждый кадр до физики через Stepped
--- Фикс бага с торсом: явно перебираем все BasePart включая торс по имени
+-- НOCLIP — HumanoidStateType.Physics отключает проверку пола у Humanoid
 RunService.Stepped:Connect(function()
     local char = player.Character
-    if not char then return end
-    if noclipEnabled or farmEnabled then
+    local hum = char and char:FindFirstChild("Humanoid")
+
+    if char and (noclipEnabled or farmEnabled) then
         for _, part in pairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.CanCollide = false
             end
         end
-        -- Явно отключаем торс на случай если он был пропущен
-        local torso = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
-        if torso then torso.CanCollide = false end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if hrp then hrp.CanCollide = false end
+        -- Ключевой фикс: Physics state отключает внутренние проверки
+        -- Humanoid на столкновение с полом/стенами
+        if hum and hum:GetState() ~= Enum.HumanoidStateType.Physics then
+            hum:ChangeState(Enum.HumanoidStateType.Physics)
+        end
+    elseif char and hum then
+        if hum:GetState() == Enum.HumanoidStateType.Physics then
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end
     end
 end)
 
@@ -345,7 +358,6 @@ RunService.Heartbeat:Connect(function(dt)
     root.AssemblyLinearVelocity  = Vector3.zero
     root.AssemblyAngularVelocity = Vector3.zero
 
-    -- Сброс таргета если удалён или вне радиуса
     if currentTarget then
         if not currentTarget:IsDescendantOf(workspace)
         or (currentTarget.Position - root.Position).Magnitude > coinRadius then
@@ -354,13 +366,12 @@ RunService.Heartbeat:Connect(function(dt)
         end
     end
 
-    -- Пункт 2: если в радиусе вообще нет монет — сбрасываем игнор-лист
+    -- Сброс игнора если монет в радиусе нет вообще
     if not anyCoinsInRange() then
         ignoredCoins = {}
     end
 
     if isWaiting then
-        -- Режим 100%: держимся ногами над монетой пока ждём
         if collectMode == "100" and currentTarget and currentTarget.Parent then
             local hipOffset = getHipOffset(char)
             root.CFrame = CFrame.new(
@@ -384,7 +395,6 @@ RunService.Heartbeat:Connect(function(dt)
         end
     end
 
-    -- Достигли монеты?
     if currentTarget then
         local dist = (currentTarget.Position - root.Position).Magnitude
         local stopDist = (collectMode == "100") and 0.5 or 2
@@ -393,7 +403,6 @@ RunService.Heartbeat:Connect(function(dt)
             isWaiting = true
             targetTimer = 0
 
-            -- Режим 100%: телепортируемся ногами в монету
             if collectMode == "100" then
                 local hipOffset = getHipOffset(char)
                 root.CFrame = CFrame.new(
@@ -414,7 +423,6 @@ RunService.Heartbeat:Connect(function(dt)
         end
     end
 
-    -- Ищем новую монету
     if not currentTarget then
         targetTimer   = 0
         currentTarget = getClosestCoinInRange()
