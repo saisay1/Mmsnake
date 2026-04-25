@@ -480,7 +480,7 @@ local function getLevelOffset(char)
         return hum.HipHeight + halfHRP
     elseif mode100 == "head" then
         -- Голова на уровне монеты: HRP опущен вниз (+ 0.8 чтобы голова доставала)
-        return -(hum.HipHeight + halfHRP * 2) + 0.3
+        return -(hum.HipHeight + halfHRP * 2) + 0.5
     else
         return 0 -- торс: центр HRP прямо в монете
     end
