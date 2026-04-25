@@ -1,4 +1,4 @@
--- EgorPrime v1.5
+-- EgorPrime v1.6
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -24,6 +24,11 @@ local targetTimer = 0
 local isFlying = false
 local spinAngle = 0
 local mode100 = "torso"
+
+-- Режим полёта для ног и головы:
+-- "level"  = лететь на уровне части тела (без поворота, просто смещение Y)
+-- "rotate" = повернуться этой частью к монете
+local flightMode = "level"
 
 -- GUI
 local screenGui = Instance.new("ScreenGui")
@@ -55,7 +60,7 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 30)
 title.Position = UDim2.new(0, 0, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "Егор Прайм v1.5"
+title.Text = "Егор Прайм v1.6"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 15
@@ -112,7 +117,6 @@ local function makeBtn(text, posY, width, posX)
     return btn
 end
 
--- COIN кнопка
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size = UDim2.new(0, 108, 0, 28)
 toggleBtn.Position = UDim2.new(0, 52, 0, 35)
@@ -126,7 +130,6 @@ local tCorner = Instance.new("UICorner")
 tCorner.CornerRadius = UDim.new(0, 6)
 tCorner.Parent = toggleBtn
 
--- "..." рядом с COIN
 local dotsBtn = Instance.new("TextButton")
 dotsBtn.Size = UDim2.new(0, 30, 0, 28)
 dotsBtn.Position = UDim2.new(0, 165, 0, 35)
@@ -186,7 +189,6 @@ local btn90       = makeDropBtn(dropdown, "90% (рядом)",     5)
 local btn100      = makeDropBtn(dropdown, "100% (в монету)", 34)
 local btnFastAuto = makeDropBtn(dropdown, "FAST AUTO: OFF",  63)
 
--- "..." у 100%
 local dots100 = Instance.new("TextButton")
 dots100.Size = UDim2.new(0.14, 0, 0, 26)
 dots100.Position = UDim2.new(0.84, 0, 0, 34)
@@ -201,10 +203,10 @@ local dots100Corner = Instance.new("UICorner")
 dots100Corner.CornerRadius = UDim.new(0, 4)
 dots100Corner.Parent = dots100
 
--- СУБ-МЕНЮ 100%
+-- СУБ-МЕНЮ 100% (расширено: тогл + 3 кнопки)
 local subMenu = Instance.new("Frame")
 subMenu.Name = "SubMenu100"
-subMenu.Size = UDim2.new(0, 130, 0, 90)
+subMenu.Size = UDim2.new(0, 140, 0, 122)
 subMenu.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 subMenu.BorderSizePixel = 0
 subMenu.Visible = false
@@ -219,6 +221,74 @@ local subStroke = Instance.new("UIStroke")
 subStroke.Color = Color3.fromRGB(80, 80, 255)
 subStroke.Thickness = 1.5
 subStroke.Parent = subMenu
+
+-- Тогл: УРОВЕНЬ ◀ ▶ ПОВОРОТ
+local toggleTrack = Instance.new("Frame")
+toggleTrack.Size = UDim2.new(0.9, 0, 0, 22)
+toggleTrack.Position = UDim2.new(0.05, 0, 0, 5)
+toggleTrack.BackgroundColor3 = Color3.fromRGB(45, 45, 80)
+toggleTrack.BorderSizePixel = 0
+toggleTrack.ZIndex = 21
+toggleTrack.Parent = subMenu
+local ttCorner = Instance.new("UICorner")
+ttCorner.CornerRadius = UDim.new(0, 11)
+ttCorner.Parent = toggleTrack
+
+-- Ползунок
+local toggleThumb = Instance.new("Frame")
+toggleThumb.Size = UDim2.new(0.5, 0, 1, 0)
+toggleThumb.Position = UDim2.new(0, 0, 0, 0) -- слева = level
+toggleThumb.BackgroundColor3 = Color3.fromRGB(80, 80, 200)
+toggleThumb.BorderSizePixel = 0
+toggleThumb.ZIndex = 22
+toggleThumb.Parent = toggleTrack
+local thumbCorner = Instance.new("UICorner")
+thumbCorner.CornerRadius = UDim.new(0, 11)
+thumbCorner.Parent = toggleThumb
+
+-- Подписи
+local labelLevel = Instance.new("TextLabel")
+labelLevel.Size = UDim2.new(0.5, 0, 1, 0)
+labelLevel.Position = UDim2.new(0, 0, 0, 0)
+labelLevel.BackgroundTransparency = 1
+labelLevel.Text = "Уровень"
+labelLevel.TextColor3 = Color3.fromRGB(255, 255, 255)
+labelLevel.Font = Enum.Font.GothamBold
+labelLevel.TextSize = 9
+labelLevel.ZIndex = 23
+labelLevel.Parent = toggleTrack
+
+local labelRotate = Instance.new("TextLabel")
+labelRotate.Size = UDim2.new(0.5, 0, 1, 0)
+labelRotate.Position = UDim2.new(0.5, 0, 0, 0)
+labelRotate.BackgroundTransparency = 1
+labelRotate.Text = "Поворот"
+labelRotate.TextColor3 = Color3.fromRGB(255, 255, 255)
+labelRotate.Font = Enum.Font.GothamBold
+labelRotate.TextSize = 9
+labelRotate.ZIndex = 23
+labelRotate.Parent = toggleTrack
+
+local function updateFlightModeToggle()
+    if flightMode == "level" then
+        toggleThumb.Position = UDim2.new(0, 0, 0, 0)
+        labelLevel.TextColor3  = Color3.fromRGB(255, 255, 255)
+        labelRotate.TextColor3 = Color3.fromRGB(150, 150, 150)
+    else
+        toggleThumb.Position = UDim2.new(0.5, 0, 0, 0)
+        labelLevel.TextColor3  = Color3.fromRGB(150, 150, 150)
+        labelRotate.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+end
+updateFlightModeToggle()
+
+toggleTrack.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
+        flightMode = (flightMode == "level") and "rotate" or "level"
+        updateFlightModeToggle()
+    end
+end)
 
 local function makeSubBtn(text, posY)
     local btn = Instance.new("TextButton")
@@ -237,9 +307,9 @@ local function makeSubBtn(text, posY)
     return btn
 end
 
-local btnLegs  = makeSubBtn("🦵 Ноги",   5)
-local btnTorso = makeSubBtn("👕 Торс",   33)
-local btnHead  = makeSubBtn("👤 Голова", 61)
+local btnLegs  = makeSubBtn("🦵 Ноги",   32)
+local btnTorso = makeSubBtn("👕 Торс",   60)
+local btnHead  = makeSubBtn("👤 Голова", 88)
 
 local function updateSubBtnColors()
     btnLegs.BackgroundColor3  = (mode100 == "legs")
@@ -376,7 +446,7 @@ end
 if player.Character then onCharacterAdded(player.Character) end
 player.CharacterAdded:Connect(onCharacterAdded)
 
--- Получить HipOffset для позиционирования при закреплении
+-- Смещение Y для позиционирования при закреплении на монете
 local function get100Offset(char)
     local hum = char and char:FindFirstChild("Humanoid")
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -387,26 +457,25 @@ local function get100Offset(char)
     elseif mode100 == "head" then
         return Vector3.new(0, -(hum.HipHeight + halfHRP * 2), 0)
     else
-        return Vector3.zero -- торс: прямо в монету
+        return Vector3.zero
     end
 end
 
--- Получить ориентацию CFrame во время полёта в режиме 100%
--- torso: нормально (без поворота)
--- legs:  ноги вперёд — поворот на +90° по X (вниз головой горизонтально)
--- head:  голова вперёд — поворот на -90° по X
-local function getFlightRotation()
-    if collectMode ~= "100" then
-        return CFrame.Angles(0, 0, 0)
-    end
+-- Смещение Y для позиции во время полёта (режим "level")
+-- Персонаж летит так, чтобы выбранная часть тела была на уровне монеты
+local function getLevelOffset(char)
+    local hum = char and char:FindFirstChild("Humanoid")
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hum or not hrp then return 0 end
+    local halfHRP = hrp.Size.Y / 2
     if mode100 == "legs" then
-        -- ноги смотрят в направлении полёта: наклоняем вперёд на 90°
-        return CFrame.Angles(math.rad(90), 0, 0)
+        -- Ноги на уровне монеты: HRP поднят на HipHeight + halfHRP
+        return hum.HipHeight + halfHRP
     elseif mode100 == "head" then
-        -- голова смотрит в направлении полёта: наклоняем назад на 90°
-        return CFrame.Angles(math.rad(-90), 0, 0)
+        -- Голова на уровне монеты: HRP опущен вниз
+        return -(hum.HipHeight + halfHRP * 2)
     else
-        return CFrame.Angles(0, 0, 0)
+        return 0 -- торс: центр HRP прямо в монете
     end
 end
 
@@ -430,7 +499,6 @@ local function getClosestCoinInRange()
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return nil end
-
     local closest, dist = nil, coinRadius
     for _, obj in pairs(workspace:GetDescendants()) do
         if obj.Name == coinName and obj:IsA("BasePart") and not ignoredCoins[obj] then
@@ -540,7 +608,6 @@ RunService.Heartbeat:Connect(function(dt)
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return end
 
-    -- SPIN: крутим независимо от фарма
     if spinEnabled and not farmEnabled then
         spinAngle = (spinAngle + 10) % 360
         root.CFrame = CFrame.new(root.Position) * CFrame.Angles(0, math.rad(spinAngle), 0)
@@ -623,26 +690,53 @@ RunService.Heartbeat:Connect(function(dt)
 
         isFlying = true
 
-        local newPos = root.Position + diff.Unit * (speed * dt)
+        local targetPos = currentTarget.Position
+        local newPos
 
-        -- Направление взгляда: смотрим в сторону монеты по горизонтали
-        local lookDir   = Vector3.new(diff.X, 0, diff.Z)
-        local lookCF    = if lookDir.Magnitude > 0.01
-            then CFrame.lookAt(newPos, newPos + lookDir)
-            else CFrame.new(newPos)
+        if collectMode == "100" and mode100 ~= "torso" then
+            if flightMode == "level" then
+                -- УРОВЕНЬ: летим обычно но целимся в точку со смещением Y
+                -- чтобы выбранная часть тела оказалась на уровне монеты
+                local yOffset = getLevelOffset(char)
+                local adjustedTarget = Vector3.new(targetPos.X, targetPos.Y + yOffset, targetPos.Z)
+                local adjustedDiff = adjustedTarget - root.Position
+                if adjustedDiff.Magnitude < 0.01 then return end
+                newPos = root.Position + adjustedDiff.Unit * (speed * dt)
 
-        -- Поворот в зависимости от режима 100%:
-        -- legs:  +90° по X — ноги летят вперёд (персонаж горизонтально ногами к монете)
-        -- head:  -90° по X — голова летит вперёд
-        -- torso: без поворота — как обычно
-        local rot = getFlightRotation()
+                if spinEnabled then
+                    spinAngle = (spinAngle + 10) % 360
+                    root.CFrame = CFrame.new(newPos) * CFrame.Angles(0, math.rad(spinAngle), 0)
+                else
+                    root.CFrame = CFrame.new(newPos)
+                end
+            else
+                -- ПОВОРОТ: летим к монете, повернувшись выбранной частью вперёд
+                newPos = root.Position + diff.Unit * (speed * dt)
+                local lookDir = Vector3.new(diff.X, 0, diff.Z)
+                local lookCF = if lookDir.Magnitude > 0.01
+                    then CFrame.lookAt(newPos, newPos + lookDir)
+                    else CFrame.new(newPos)
 
-        if spinEnabled then
-            -- Spin поверх режима — добавляем вращение по Y
-            spinAngle = (spinAngle + 10) % 360
-            root.CFrame = lookCF * rot * CFrame.Angles(0, math.rad(spinAngle), 0)
+                local rot = if mode100 == "legs"
+                    then CFrame.Angles(math.rad(90),  0, 0)
+                    else CFrame.Angles(math.rad(-90), 0, 0)
+
+                if spinEnabled then
+                    spinAngle = (spinAngle + 10) % 360
+                    root.CFrame = lookCF * rot * CFrame.Angles(0, math.rad(spinAngle), 0)
+                else
+                    root.CFrame = lookCF * rot
+                end
+            end
         else
-            root.CFrame = lookCF * rot
+            -- Торс или режим 90%: обычный полёт
+            newPos = root.Position + diff.Unit * (speed * dt)
+            if spinEnabled then
+                spinAngle = (spinAngle + 10) % 360
+                root.CFrame = CFrame.new(newPos) * CFrame.Angles(0, math.rad(spinAngle), 0)
+            else
+                root.CFrame = CFrame.new(newPos)
+            end
         end
 
         root.AssemblyLinearVelocity  = Vector3.zero
