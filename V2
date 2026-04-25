@@ -1,4 +1,4 @@
--- EgorPrime v1.3
+-- EgorPrime v1.4
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -12,6 +12,7 @@ local coinRadius = 500
 local farmEnabled = false
 local noclipEnabled = false
 local antiAfkEnabled = false
+local spinEnabled = false
 local currentTarget = nil
 local lastStableY = nil
 local isWaiting = false
@@ -21,8 +22,7 @@ local collectMode = "90"
 local fastAutoEnabled = false
 local targetTimer = 0
 local isFlying = false
-
--- Суб-режим для 100%: "torso" | "legs" | "head"
+local spinAngle = 0
 local mode100 = "torso"
 
 -- GUI
@@ -35,8 +35,8 @@ if not success then screenGui.Parent = player:WaitForChild("PlayerGui") end
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 180, 0, 160)
-mainFrame.Position = UDim2.new(0.5, -90, 0.5, -80)
+mainFrame.Size = UDim2.new(0, 210, 0, 195)
+mainFrame.Position = UDim2.new(0.5, -105, 0.5, -97)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -55,11 +55,46 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 30)
 title.Position = UDim2.new(0, 0, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "Егор Прайм v1.3"
+title.Text = "Егор Прайм v1.4"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 15
 title.Parent = mainFrame
+
+-- Строка 1: [скорость] [COIN] [...]
+-- Поле ввода скорости слева от COIN
+local speedBox = Instance.new("TextBox")
+speedBox.Size = UDim2.new(0, 38, 0, 28)
+speedBox.Position = UDim2.new(0, 8, 0, 35)
+speedBox.BackgroundColor3 = Color3.fromRGB(40, 40, 70)
+speedBox.Text = tostring(speed)
+speedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+speedBox.Font = Enum.Font.GothamBold
+speedBox.TextSize = 12
+speedBox.PlaceholderText = "spd"
+speedBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+speedBox.ClearTextOnFocus = false
+speedBox.Parent = mainFrame
+
+local speedBoxCorner = Instance.new("UICorner")
+speedBoxCorner.CornerRadius = UDim.new(0, 6)
+speedBoxCorner.Parent = speedBox
+
+local speedBoxStroke = Instance.new("UIStroke")
+speedBoxStroke.Color = Color3.fromRGB(80, 80, 200)
+speedBoxStroke.Thickness = 1.5
+speedBoxStroke.Parent = speedBox
+
+-- Применяем скорость при потере фокуса или Enter
+speedBox.FocusLost:Connect(function()
+    local val = tonumber(speedBox.Text)
+    if val and val > 0 and val <= 500 then
+        speed = val
+        speedBox.Text = tostring(val)
+    else
+        speedBox.Text = tostring(speed)
+    end
+end)
 
 local function makeBtn(text, posY, width, posX)
     width = width or 0.85
@@ -79,11 +114,24 @@ local function makeBtn(text, posY, width, posX)
     return btn
 end
 
-local toggleBtn = makeBtn("COIN: OFF", 35, 0.63, 0.075)
+-- COIN кнопка (чуть правее, рядом с speedBox)
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 108, 0, 28)
+toggleBtn.Position = UDim2.new(0, 52, 0, 35)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+toggleBtn.Text = "COIN: OFF"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 12
+toggleBtn.Parent = mainFrame
+local tCorner = Instance.new("UICorner")
+tCorner.CornerRadius = UDim.new(0, 6)
+tCorner.Parent = toggleBtn
 
+-- "..." рядом с COIN
 local dotsBtn = Instance.new("TextButton")
-dotsBtn.Size = UDim2.new(0.17, 0, 0, 28)
-dotsBtn.Position = UDim2.new(0.76, 0, 0, 35)
+dotsBtn.Size = UDim2.new(0, 30, 0, 28)
+dotsBtn.Position = UDim2.new(0, 165, 0, 35)
 dotsBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 120)
 dotsBtn.Text = "..."
 dotsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -95,9 +143,10 @@ dotsCorner.CornerRadius = UDim.new(0, 6)
 dotsCorner.Parent = dotsBtn
 
 local noclipBtn  = makeBtn("NOCLIP: OFF",  72)
-local antiAfkBtn = makeBtn("ANTIAFK: OFF", 109)
+local spinBtn    = makeBtn("SPIN: OFF",    109)
+local antiAfkBtn = makeBtn("ANTIAFK: OFF", 146)
 
--- ГЛАВНЫЙ ДРОПДАУН (режимы + fast auto)
+-- ГЛАВНЫЙ ДРОПДАУН
 local dropdown = Instance.new("Frame")
 dropdown.Name = "Dropdown"
 dropdown.Size = UDim2.new(0, 160, 0, 90)
@@ -116,10 +165,11 @@ dropStroke.Color = Color3.fromRGB(80, 80, 255)
 dropStroke.Thickness = 1.5
 dropStroke.Parent = dropdown
 
-local function makeDropBtn(parent, text, posY, zIndex)
+local function makeDropBtn(parent, text, posY, w, zIndex)
+    w = w or 0.78
     zIndex = zIndex or 11
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.78, 0, 0, 26)
+    btn.Size = UDim2.new(w, 0, 0, 26)
     btn.Position = UDim2.new(0.05, 0, 0, posY)
     btn.BackgroundColor3 = Color3.fromRGB(50, 50, 100)
     btn.Text = text
@@ -134,12 +184,11 @@ local function makeDropBtn(parent, text, posY, zIndex)
     return btn
 end
 
--- Кнопки главного дропдауна
 local btn90       = makeDropBtn(dropdown, "90% (рядом)",     5)
 local btn100      = makeDropBtn(dropdown, "100% (в монету)", 34)
 local btnFastAuto = makeDropBtn(dropdown, "FAST AUTO: OFF",  63)
 
--- Кнопка "..." рядом с btn100 для суб-меню
+-- "..." у 100%
 local dots100 = Instance.new("TextButton")
 dots100.Size = UDim2.new(0.14, 0, 0, 26)
 dots100.Position = UDim2.new(0.84, 0, 0, 34)
@@ -154,7 +203,7 @@ local dots100Corner = Instance.new("UICorner")
 dots100Corner.CornerRadius = UDim.new(0, 4)
 dots100Corner.Parent = dots100
 
--- СУБ-МЕНЮ 100% (голова / торс / ноги)
+-- СУБ-МЕНЮ 100%
 local subMenu = Instance.new("Frame")
 subMenu.Name = "SubMenu100"
 subMenu.Size = UDim2.new(0, 130, 0, 90)
@@ -190,11 +239,10 @@ local function makeSubBtn(text, posY)
     return btn
 end
 
-local btnLegs  = makeSubBtn("🦵 Ноги",  5)
-local btnTorso = makeSubBtn("🫁 Торс",  33)
+local btnLegs  = makeSubBtn("🦵 Ноги",   5)
+local btnTorso = makeSubBtn("🫁 Торс",   33)
 local btnHead  = makeSubBtn("👤 Голова", 61)
 
--- Обновление цветов
 local function updateSubBtnColors()
     btnLegs.BackgroundColor3  = (mode100 == "legs")
         and Color3.fromRGB(50, 130, 50) or Color3.fromRGB(50, 50, 100)
@@ -233,9 +281,7 @@ end
 dotsBtn.MouseButton1Click:Connect(function()
     updateDropdownPos()
     dropdown.Visible = not dropdown.Visible
-    if not dropdown.Visible then
-        subMenu.Visible = false
-    end
+    if not dropdown.Visible then subMenu.Visible = false end
 end)
 
 dots100.MouseButton1Click:Connect(function()
@@ -285,7 +331,7 @@ local function update(input)
         startPos.Y.Scale, startPos.Y.Offset + delta.Y
     )
     if dropdown.Visible then updateDropdownPos() end
-    if subMenu.Visible then updateSubMenuPos() end
+    if subMenu.Visible  then updateSubMenuPos()  end
 end
 
 mainFrame.InputBegan:Connect(function(input)
@@ -337,17 +383,12 @@ local function get100Offset(char)
     local hum = char and char:FindFirstChild("Humanoid")
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hum or not hrp then return Vector3.zero end
-
     local halfHRP = hrp.Size.Y / 2
-
     if mode100 == "legs" then
-        -- Ноги на уровне монеты: поднимаем на HipHeight + половина HRP
         return Vector3.new(0, hum.HipHeight + halfHRP, 0)
     elseif mode100 == "head" then
-        -- Голова на уровне монеты: опускаем вниз примерно на рост персонажа
         return Vector3.new(0, -(hum.HipHeight + halfHRP * 2), 0)
     else
-        -- Торс: прямо в монету без смещения
         return Vector3.zero
     end
 end
@@ -419,6 +460,13 @@ noclipBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+spinBtn.MouseButton1Click:Connect(function()
+    spinEnabled = not spinEnabled
+    spinBtn.Text = spinEnabled and "SPIN: ON" or "SPIN: OFF"
+    spinBtn.BackgroundColor3 = spinEnabled
+        and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
+end)
+
 antiAfkBtn.MouseButton1Click:Connect(function()
     antiAfkEnabled = not antiAfkEnabled
     antiAfkBtn.Text = antiAfkEnabled and "ANTIAFK: ON" or "ANTIAFK: OFF"
@@ -469,11 +517,20 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- ГЛАВНЫЙ ЦИКЛ ФАРМА
+-- ГЛАВНЫЙ ЦИКЛ ФАРМА + SPIN
 RunService.Heartbeat:Connect(function(dt)
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
-    if not root or not farmEnabled then return end
+    if not root then return end
+
+    -- SPIN: крутим независимо от фарма
+    if spinEnabled then
+        spinAngle = spinAngle + 10
+        if spinAngle >= 360 then spinAngle = spinAngle - 360 end
+        root.CFrame = CFrame.new(root.Position) * CFrame.Angles(0, math.rad(spinAngle), 0)
+    end
+
+    if not farmEnabled then return end
 
     if currentTarget then
         if not currentTarget:IsDescendantOf(workspace)
@@ -551,7 +608,12 @@ RunService.Heartbeat:Connect(function(dt)
         isFlying = true
 
         local newPos = root.Position + diff.Unit * (speed * dt)
-        root.CFrame = CFrame.new(newPos)
+        -- Если spin включён — сохраняем вращение, только меняем позицию
+        if spinEnabled then
+            root.CFrame = CFrame.new(newPos) * CFrame.Angles(0, math.rad(spinAngle), 0)
+        else
+            root.CFrame = CFrame.new(newPos)
+        end
         root.AssemblyLinearVelocity  = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
     else
