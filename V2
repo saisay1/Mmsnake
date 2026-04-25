@@ -1,4 +1,4 @@
--- EgorPrime v1.4
+-- EgorPrime v1.5
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -55,14 +55,13 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 30)
 title.Position = UDim2.new(0, 0, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "Егор Прайм v1.4"
+title.Text = "Егор Прайм v1.5"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 15
 title.Parent = mainFrame
 
--- Строка 1: [скорость] [COIN] [...]
--- Поле ввода скорости слева от COIN
+-- Поле ввода скорости
 local speedBox = Instance.new("TextBox")
 speedBox.Size = UDim2.new(0, 38, 0, 28)
 speedBox.Position = UDim2.new(0, 8, 0, 35)
@@ -85,7 +84,6 @@ speedBoxStroke.Color = Color3.fromRGB(80, 80, 200)
 speedBoxStroke.Thickness = 1.5
 speedBoxStroke.Parent = speedBox
 
--- Применяем скорость при потере фокуса или Enter
 speedBox.FocusLost:Connect(function()
     local val = tonumber(speedBox.Text)
     if val and val > 0 and val <= 500 then
@@ -114,7 +112,7 @@ local function makeBtn(text, posY, width, posX)
     return btn
 end
 
--- COIN кнопка (чуть правее, рядом с speedBox)
+-- COIN кнопка
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size = UDim2.new(0, 108, 0, 28)
 toggleBtn.Position = UDim2.new(0, 52, 0, 35)
@@ -240,7 +238,7 @@ local function makeSubBtn(text, posY)
 end
 
 local btnLegs  = makeSubBtn("🦵 Ноги",   5)
-local btnTorso = makeSubBtn("🫁 Торс",   33)
+local btnTorso = makeSubBtn("👕 Торс",   33)
 local btnHead  = makeSubBtn("👤 Голова", 61)
 
 local function updateSubBtnColors()
@@ -378,7 +376,7 @@ end
 if player.Character then onCharacterAdded(player.Character) end
 player.CharacterAdded:Connect(onCharacterAdded)
 
--- Смещение по режиму 100%
+-- Получить HipOffset для позиционирования при закреплении
 local function get100Offset(char)
     local hum = char and char:FindFirstChild("Humanoid")
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -389,7 +387,26 @@ local function get100Offset(char)
     elseif mode100 == "head" then
         return Vector3.new(0, -(hum.HipHeight + halfHRP * 2), 0)
     else
-        return Vector3.zero
+        return Vector3.zero -- торс: прямо в монету
+    end
+end
+
+-- Получить ориентацию CFrame во время полёта в режиме 100%
+-- torso: нормально (без поворота)
+-- legs:  ноги вперёд — поворот на +90° по X (вниз головой горизонтально)
+-- head:  голова вперёд — поворот на -90° по X
+local function getFlightRotation()
+    if collectMode ~= "100" then
+        return CFrame.Angles(0, 0, 0)
+    end
+    if mode100 == "legs" then
+        -- ноги смотрят в направлении полёта: наклоняем вперёд на 90°
+        return CFrame.Angles(math.rad(90), 0, 0)
+    elseif mode100 == "head" then
+        -- голова смотрит в направлении полёта: наклоняем назад на 90°
+        return CFrame.Angles(math.rad(-90), 0, 0)
+    else
+        return CFrame.Angles(0, 0, 0)
     end
 end
 
@@ -524,9 +541,8 @@ RunService.Heartbeat:Connect(function(dt)
     if not root then return end
 
     -- SPIN: крутим независимо от фарма
-    if spinEnabled then
-        spinAngle = spinAngle + 10
-        if spinAngle >= 360 then spinAngle = spinAngle - 360 end
+    if spinEnabled and not farmEnabled then
+        spinAngle = (spinAngle + 10) % 360
         root.CFrame = CFrame.new(root.Position) * CFrame.Angles(0, math.rad(spinAngle), 0)
     end
 
@@ -608,12 +624,27 @@ RunService.Heartbeat:Connect(function(dt)
         isFlying = true
 
         local newPos = root.Position + diff.Unit * (speed * dt)
-        -- Если spin включён — сохраняем вращение, только меняем позицию
+
+        -- Направление взгляда: смотрим в сторону монеты по горизонтали
+        local lookDir   = Vector3.new(diff.X, 0, diff.Z)
+        local lookCF    = if lookDir.Magnitude > 0.01
+            then CFrame.lookAt(newPos, newPos + lookDir)
+            else CFrame.new(newPos)
+
+        -- Поворот в зависимости от режима 100%:
+        -- legs:  +90° по X — ноги летят вперёд (персонаж горизонтально ногами к монете)
+        -- head:  -90° по X — голова летит вперёд
+        -- torso: без поворота — как обычно
+        local rot = getFlightRotation()
+
         if spinEnabled then
-            root.CFrame = CFrame.new(newPos) * CFrame.Angles(0, math.rad(spinAngle), 0)
+            -- Spin поверх режима — добавляем вращение по Y
+            spinAngle = (spinAngle + 10) % 360
+            root.CFrame = lookCF * rot * CFrame.Angles(0, math.rad(spinAngle), 0)
         else
-            root.CFrame = CFrame.new(newPos)
+            root.CFrame = lookCF * rot
         end
+
         root.AssemblyLinearVelocity  = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
     else
