@@ -1,3 +1,5 @@
+-- EgorPrime v1.3
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -18,9 +20,10 @@ local ignoredCoins = {}
 local collectMode = "90"
 local fastAutoEnabled = false
 local targetTimer = 0
-
--- Флаг: летим прямо сейчас или нет
 local isFlying = false
+
+-- Суб-режим для 100%: "torso" | "legs" | "head"
+local mode100 = "torso"
 
 -- GUI
 local screenGui = Instance.new("ScreenGui")
@@ -52,10 +55,10 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 30)
 title.Position = UDim2.new(0, 0, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "Егор Прайм"
+title.Text = "Егор Прайм v1.3"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
-title.TextSize = 16
+title.TextSize = 15
 title.Parent = mainFrame
 
 local function makeBtn(text, posY, width, posX)
@@ -94,7 +97,7 @@ dotsCorner.Parent = dotsBtn
 local noclipBtn  = makeBtn("NOCLIP: OFF",  72)
 local antiAfkBtn = makeBtn("ANTIAFK: OFF", 109)
 
--- ДРОПДАУН
+-- ГЛАВНЫЙ ДРОПДАУН (режимы + fast auto)
 local dropdown = Instance.new("Frame")
 dropdown.Name = "Dropdown"
 dropdown.Size = UDim2.new(0, 160, 0, 90)
@@ -113,26 +116,94 @@ dropStroke.Color = Color3.fromRGB(80, 80, 255)
 dropStroke.Thickness = 1.5
 dropStroke.Parent = dropdown
 
-local function makeDropBtn(text, posY)
+local function makeDropBtn(parent, text, posY, zIndex)
+    zIndex = zIndex or 11
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.9, 0, 0, 26)
+    btn.Size = UDim2.new(0.78, 0, 0, 26)
     btn.Position = UDim2.new(0.05, 0, 0, posY)
     btn.BackgroundColor3 = Color3.fromRGB(50, 50, 100)
     btn.Text = text
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 11
-    btn.ZIndex = 11
-    btn.Parent = dropdown
+    btn.ZIndex = zIndex
+    btn.Parent = parent
     local c = Instance.new("UICorner")
     c.CornerRadius = UDim.new(0, 5)
     c.Parent = btn
     return btn
 end
 
-local btn90       = makeDropBtn("90% (рядом)",     5)
-local btn100      = makeDropBtn("100% (в монету)", 34)
-local btnFastAuto = makeDropBtn("FAST AUTO: OFF",  63)
+-- Кнопки главного дропдауна
+local btn90       = makeDropBtn(dropdown, "90% (рядом)",     5)
+local btn100      = makeDropBtn(dropdown, "100% (в монету)", 34)
+local btnFastAuto = makeDropBtn(dropdown, "FAST AUTO: OFF",  63)
+
+-- Кнопка "..." рядом с btn100 для суб-меню
+local dots100 = Instance.new("TextButton")
+dots100.Size = UDim2.new(0.14, 0, 0, 26)
+dots100.Position = UDim2.new(0.84, 0, 0, 34)
+dots100.BackgroundColor3 = Color3.fromRGB(60, 60, 120)
+dots100.Text = "..."
+dots100.TextColor3 = Color3.fromRGB(255, 255, 255)
+dots100.Font = Enum.Font.GothamBold
+dots100.TextSize = 11
+dots100.ZIndex = 11
+dots100.Parent = dropdown
+local dots100Corner = Instance.new("UICorner")
+dots100Corner.CornerRadius = UDim.new(0, 4)
+dots100Corner.Parent = dots100
+
+-- СУБ-МЕНЮ 100% (голова / торс / ноги)
+local subMenu = Instance.new("Frame")
+subMenu.Name = "SubMenu100"
+subMenu.Size = UDim2.new(0, 130, 0, 90)
+subMenu.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+subMenu.BorderSizePixel = 0
+subMenu.Visible = false
+subMenu.ZIndex = 20
+subMenu.Parent = screenGui
+
+local subCorner = Instance.new("UICorner")
+subCorner.CornerRadius = UDim.new(0, 8)
+subCorner.Parent = subMenu
+
+local subStroke = Instance.new("UIStroke")
+subStroke.Color = Color3.fromRGB(80, 80, 255)
+subStroke.Thickness = 1.5
+subStroke.Parent = subMenu
+
+local function makeSubBtn(text, posY)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.88, 0, 0, 24)
+    btn.Position = UDim2.new(0.06, 0, 0, posY)
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 100)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 11
+    btn.ZIndex = 21
+    btn.Parent = subMenu
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 5)
+    c.Parent = btn
+    return btn
+end
+
+local btnLegs  = makeSubBtn("🦵 Ноги",  5)
+local btnTorso = makeSubBtn("🫁 Торс",  33)
+local btnHead  = makeSubBtn("👤 Голова", 61)
+
+-- Обновление цветов
+local function updateSubBtnColors()
+    btnLegs.BackgroundColor3  = (mode100 == "legs")
+        and Color3.fromRGB(50, 130, 50) or Color3.fromRGB(50, 50, 100)
+    btnTorso.BackgroundColor3 = (mode100 == "torso")
+        and Color3.fromRGB(50, 130, 50) or Color3.fromRGB(50, 50, 100)
+    btnHead.BackgroundColor3  = (mode100 == "head")
+        and Color3.fromRGB(50, 130, 50) or Color3.fromRGB(50, 50, 100)
+end
+updateSubBtnColors()
 
 local function updateDropBtnColors()
     btn90.BackgroundColor3  = (collectMode == "90")
@@ -152,13 +223,29 @@ local function updateDropdownPos()
     )
 end
 
+local function updateSubMenuPos()
+    subMenu.Position = UDim2.new(
+        0, dropdown.AbsolutePosition.X + dropdown.AbsoluteSize.X + 5,
+        0, dropdown.AbsolutePosition.Y + 30
+    )
+end
+
 dotsBtn.MouseButton1Click:Connect(function()
     updateDropdownPos()
     dropdown.Visible = not dropdown.Visible
+    if not dropdown.Visible then
+        subMenu.Visible = false
+    end
+end)
+
+dots100.MouseButton1Click:Connect(function()
+    updateSubMenuPos()
+    subMenu.Visible = not subMenu.Visible
 end)
 
 btn90.MouseButton1Click:Connect(function()
     collectMode = "90"
+    subMenu.Visible = false
     updateDropBtnColors()
 end)
 
@@ -173,6 +260,21 @@ btnFastAuto.MouseButton1Click:Connect(function()
     updateDropBtnColors()
 end)
 
+btnLegs.MouseButton1Click:Connect(function()
+    mode100 = "legs"
+    updateSubBtnColors()
+end)
+
+btnTorso.MouseButton1Click:Connect(function()
+    mode100 = "torso"
+    updateSubBtnColors()
+end)
+
+btnHead.MouseButton1Click:Connect(function()
+    mode100 = "head"
+    updateSubBtnColors()
+end)
+
 -- ПЕРЕТАСКИВАНИЕ
 local dragging, dragInput, dragStart, startPos
 
@@ -183,6 +285,7 @@ local function update(input)
         startPos.Y.Scale, startPos.Y.Offset + delta.Y
     )
     if dropdown.Visible then updateDropdownPos() end
+    if subMenu.Visible then updateSubMenuPos() end
 end
 
 mainFrame.InputBegan:Connect(function(input)
@@ -229,7 +332,27 @@ end
 if player.Character then onCharacterAdded(player.Character) end
 player.CharacterAdded:Connect(onCharacterAdded)
 
--- Есть ли монеты в радиусе вообще
+-- Смещение по режиму 100%
+local function get100Offset(char)
+    local hum = char and char:FindFirstChild("Humanoid")
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hum or not hrp then return Vector3.zero end
+
+    local halfHRP = hrp.Size.Y / 2
+
+    if mode100 == "legs" then
+        -- Ноги на уровне монеты: поднимаем на HipHeight + половина HRP
+        return Vector3.new(0, hum.HipHeight + halfHRP, 0)
+    elseif mode100 == "head" then
+        -- Голова на уровне монеты: опускаем вниз примерно на рост персонажа
+        return Vector3.new(0, -(hum.HipHeight + halfHRP * 2), 0)
+    else
+        -- Торс: прямо в монету без смещения
+        return Vector3.zero
+    end
+end
+
+-- Есть ли монеты в радиусе
 local function anyCoinsInRange()
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -279,6 +402,7 @@ toggleBtn.MouseButton1Click:Connect(function()
             hum:ChangeState(Enum.HumanoidStateType.GettingUp)
         end
         dropdown.Visible = false
+        subMenu.Visible  = false
     end
 end)
 
@@ -320,7 +444,7 @@ RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
--- НOCLIP + управление Physics state
+-- НOCLIP + Physics state
 RunService.Stepped:Connect(function()
     local char = player.Character
     local hum = char and char:FindFirstChild("Humanoid")
@@ -334,7 +458,6 @@ RunService.Stepped:Connect(function()
         end
     end
 
-    -- Physics state только когда реально летим к монете
     if farmEnabled and isFlying then
         if hum:GetState() ~= Enum.HumanoidStateType.Physics then
             hum:ChangeState(Enum.HumanoidStateType.Physics)
@@ -360,7 +483,6 @@ RunService.Heartbeat:Connect(function(dt)
         end
     end
 
-    -- Сброс игнора если монет в радиусе нет вообще
     if not anyCoinsInRange() then
         ignoredCoins = {}
         isFlying = false
@@ -368,9 +490,9 @@ RunService.Heartbeat:Connect(function(dt)
     end
 
     if isWaiting then
-        -- Режим 100%: телепорт прямо в центр монеты, без смещения
         if collectMode == "100" and currentTarget and currentTarget.Parent then
-            root.CFrame = CFrame.new(currentTarget.Position)
+            local offset = get100Offset(char)
+            root.CFrame = CFrame.new(currentTarget.Position + offset)
             root.AssemblyLinearVelocity  = Vector3.zero
             root.AssemblyAngularVelocity = Vector3.zero
         end
@@ -398,9 +520,9 @@ RunService.Heartbeat:Connect(function(dt)
             isFlying  = false
             targetTimer = 0
 
-            -- Режим 100%: телепорт прямо в монету без смещения
             if collectMode == "100" then
-                root.CFrame = CFrame.new(currentTarget.Position)
+                local offset = get100Offset(char)
+                root.CFrame = CFrame.new(currentTarget.Position + offset)
             end
 
             task.wait(0.2)
@@ -432,7 +554,6 @@ RunService.Heartbeat:Connect(function(dt)
         root.CFrame = CFrame.new(newPos)
         root.AssemblyLinearVelocity  = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
-
     else
         isFlying = false
     end
