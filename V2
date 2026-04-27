@@ -381,6 +381,11 @@ btnFastAuto.MouseButton1Click:Connect(function()
     updateDropBtnColors()
 end)
 
+btnVisual.MouseButton1Click:Connect(function()
+    visualOnly = not visualOnly
+    updateDropBtnColors()
+end)
+
 btnLegs.MouseButton1Click:Connect(function()
     mode100 = "legs"
     updateSubBtnColors()
@@ -486,6 +491,24 @@ local function getLevelOffset(char)
     end
 end
 
+-- Проверка: есть ли у монеты видимый CoinVisual
+local function hasVisual(coin)
+    local visual = coin:FindFirstChild("CoinVisual")
+    if not visual then return false end
+    if visual:IsA("BasePart") then
+        return visual.Transparency == 0
+    end
+    if visual:IsA("Model") then
+        for _, part in pairs(visual:GetDescendants()) do
+            if part:IsA("BasePart") and part.Transparency == 0 then
+                return true
+            end
+        end
+        return false
+    end
+    return true
+end
+
 -- Есть ли монеты в радиусе
 local function anyCoinsInRange()
     local char = player.Character
@@ -494,7 +517,9 @@ local function anyCoinsInRange()
     for _, obj in pairs(workspace:GetDescendants()) do
         if obj.Name == coinName and obj:IsA("BasePart") then
             if (root.Position - obj.Position).Magnitude <= coinRadius then
-                return true
+                if not visualOnly or hasVisual(obj) then
+                    return true
+                end
             end
         end
     end
@@ -509,10 +534,12 @@ local function getClosestCoinInRange()
     local closest, dist = nil, coinRadius
     for _, obj in pairs(workspace:GetDescendants()) do
         if obj.Name == coinName and obj:IsA("BasePart") and not ignoredCoins[obj] then
-            local d = (root.Position - obj.Position).Magnitude
-            if d <= dist then
-                dist    = d
-                closest = obj
+            if not visualOnly or hasVisual(obj) then
+                local d = (root.Position - obj.Position).Magnitude
+                if d <= dist then
+                    dist    = d
+                    closest = obj
+                end
             end
         end
     end
