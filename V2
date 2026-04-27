@@ -25,6 +25,9 @@ local isFlying = false
 local spinAngle = 0
 local mode100 = "torso"
 
+local waitTimer = 0
+local WAIT_TIME = 0.2
+
 -- Режим полёта для ног и головы:
 -- "level"  = лететь на уровне части тела (без поворота, просто смещение Y)
 -- "rotate" = повернуться этой частью к монете
@@ -447,6 +450,7 @@ local function resetFarm()
     lastStableY   = nil
     targetTimer   = 0
     isFlying      = false
+    waitTimer     = 0
 end
 
 local function onCharacterAdded(char)
@@ -493,26 +497,42 @@ end
 
 -- Проверка: есть ли у монеты видимый CoinVisual
 local function hasVisual(coin)
-    -- coin это BasePart (хитбокс), CoinVisual может быть братом или потомком родителя
-    local container = coin.Parent -- Coin_Server (Model)
-    if not container then return false end
-
-    -- Ищем CoinVisual внутри Coin_Server
-    local visual = container:FindFirstChild("CoinVisual", true)
-    if not visual then return false end
-
-    if visual:IsA("BasePart") then
-        return visual.Transparency <= 0.5
-    end
-    if visual:IsA("Model") then
-        for _, part in pairs(visual:GetDescendants()) do
-            if part:IsA("BasePart") and part.Transparency <= 0.5 then
-                return true
+    -- Вариант 1: CoinVisual внутри самого Coin_Server (прямой потомок)
+    local visual = coin:FindFirstChild("CoinVisual", true)
+    if visual then
+        if visual:IsA("BasePart") then
+            return visual.Transparency <= 0.5
+        end
+        if visual:IsA("Model") then
+            for _, part in pairs(visual:GetDescendants()) do
+                if part:IsA("BasePart") and part.Transparency <= 0.5 then
+                    return true
+                end
             end
         end
         return false
     end
-    return true
+
+    -- Вариант 2: CoinVisual лежит рядом с Coin_Server в родителе (CoinContainer)
+    local parent = coin.Parent
+    if parent then
+        local visual2 = parent:FindFirstChild("CoinVisual", true)
+        if visual2 then
+            if visual2:IsA("BasePart") then
+                return visual2.Transparency <= 0.5
+            end
+            if visual2:IsA("Model") then
+                for _, part in pairs(visual2:GetDescendants()) do
+                    if part:IsA("BasePart") and part.Transparency <= 0.5 then
+                        return true
+                    end
+                end
+            end
+            return false
+        end
+    end
+
+    return false
 end
 
 -- Есть ли монеты в радиусе
@@ -670,11 +690,24 @@ RunService.Heartbeat:Connect(function(dt)
     end
 
     if isWaiting then
+        waitTimer = waitTimer + dt
         if collectMode == "100" and currentTarget and currentTarget.Parent then
             local offset = get100Offset(char)
             root.CFrame = CFrame.new(currentTarget.Position + offset)
             root.AssemblyLinearVelocity  = Vector3.zero
             root.AssemblyAngularVelocity = Vector3.zero
+        end
+        -- Таймаут ожидания — не используем task.wait чтобы не зависать
+        if waitTimer >= WAIT_TIME then
+            waitTimer = 0
+            local coinToIgnore = currentTarget
+            if coinToIgnore then
+                ignoredCoins[coinToIgnore] = true
+                task.delay(3, function() ignoredCoins[coinToIgnore] = nil end)
+            end
+            currentTarget = nil
+            isWaiting     = false
+            if root then lastStableY = root.Position.Y end
         end
         return
     end
@@ -698,20 +731,13 @@ RunService.Heartbeat:Connect(function(dt)
         if dist < stopDist then
             isWaiting = true
             isFlying  = false
+            waitTimer = 0
             targetTimer = 0
 
             if collectMode == "100" then
                 local offset = get100Offset(char)
                 root.CFrame = CFrame.new(currentTarget.Position + offset)
             end
-
-            task.wait(0.2)
-            local coinToIgnore = currentTarget
-            ignoredCoins[coinToIgnore] = true
-            task.delay(3, function() ignoredCoins[coinToIgnore] = nil end)
-            currentTarget = nil
-            isWaiting     = false
-            if root then lastStableY = root.Position.Y end
             return
         end
     end
