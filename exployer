@@ -1,0 +1,57 @@
+-- Explorer Dumper
+-- Запусти в Xeno, создаст файл explorer_dump.txt
+
+local output = {}
+
+local function getProperties(obj)
+    local props = {}
+    
+    -- Тип класса
+    table.insert(props, "ClassName: " .. obj.ClassName)
+    
+    -- Прозрачность если BasePart
+    if obj:IsA("BasePart") then
+        table.insert(props, "Transparency: " .. obj.Transparency)
+        table.insert(props, "CanCollide: " .. tostring(obj.CanCollide))
+        table.insert(props, "Size: " .. tostring(obj.Size))
+    end
+    
+    -- Если MeshPart
+    if obj:IsA("MeshPart") then
+        table.insert(props, "MeshId: " .. obj.MeshId)
+    end
+    
+    -- Если специальный меш
+    if obj:IsA("SpecialMesh") then
+        table.insert(props, "MeshType: " .. tostring(obj.MeshType))
+        table.insert(props, "MeshId: " .. obj.MeshId)
+    end
+    
+    -- Если Model
+    if obj:IsA("Model") then
+        local children = obj:GetChildren()
+        table.insert(props, "ChildCount: " .. #children)
+    end
+
+    return table.concat(props, " | ")
+end
+
+local function dump(obj, depth)
+    local indent = string.rep("  ", depth)
+    local line = indent .. "[" .. obj.Name .. "] " .. getProperties(obj)
+    table.insert(output, line)
+    
+    for _, child in pairs(obj:GetChildren()) do
+        dump(child, depth + 1)
+    end
+end
+
+-- Дампим весь workspace
+dump(workspace, 0)
+
+local text = table.concat(output, "\n")
+
+-- Сохраняем в файл
+writefile("explorer_dump.txt", text)
+print("Готово! Файл explorer_dump.txt сохранён")
+print("Всего строк: " .. #output)
