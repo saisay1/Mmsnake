@@ -1,4 +1,4 @@
--- EgorPrime v1.6
+-- EgorPrime v1.7
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -63,7 +63,7 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 30)
 title.Position = UDim2.new(0, 0, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "Егор Прайм v1.6"
+title.Text = "Егор Прайм v1.7"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 15
@@ -496,11 +496,11 @@ local function hasVisual(coin)
     local visual = coin:FindFirstChild("CoinVisual")
     if not visual then return false end
     if visual:IsA("BasePart") then
-        return visual.Transparency == 0
+        return visual.Transparency <= 0.5
     end
     if visual:IsA("Model") then
         for _, part in pairs(visual:GetDescendants()) do
-            if part:IsA("BasePart") and part.Transparency == 0 then
+            if part:IsA("BasePart") and part.Transparency <= 0.5 then
                 return true
             end
         end
