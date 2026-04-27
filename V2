@@ -493,8 +493,14 @@ end
 
 -- Проверка: есть ли у монеты видимый CoinVisual
 local function hasVisual(coin)
-    local visual = coin:FindFirstChild("CoinVisual")
+    -- coin это BasePart (хитбокс), CoinVisual может быть братом или потомком родителя
+    local container = coin.Parent -- Coin_Server (Model)
+    if not container then return false end
+
+    -- Ищем CoinVisual внутри Coin_Server
+    local visual = container:FindFirstChild("CoinVisual", true)
     if not visual then return false end
+
     if visual:IsA("BasePart") then
         return visual.Transparency <= 0.5
     end
